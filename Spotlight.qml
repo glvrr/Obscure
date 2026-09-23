@@ -111,13 +111,12 @@ Item {
   readonly property string openScript: String(Qt.resolvedUrl("open-file.sh")).replace(/^file:\/\//, "")
 
   readonly property int gridCols: 6
-  readonly property int maxGridRows: 3
-  readonly property int gridCap: root.gridCols * root.maxGridRows
+  readonly property int gridVisibleRows: 3
 
-  readonly property var gridItems: root.appMatches(root.stripped, root.gridCap)
+  readonly property var gridItems: root.appMatches(root.stripped, root.allApps.length)
 
   function appMatches(q, cap) {
-    var limit = cap || root.gridCap
+    var limit = cap || root.allApps.length
     var ql = String(q || "").toLowerCase().split(/\s+/).filter(function(w) { return w !== "" })
     var out = []
     for (var i = 0; i < root.allApps.length && out.length < limit; i++) {
@@ -160,6 +159,7 @@ Item {
       root.appIndexReady = true
       try {
         root.allApps = root.buildGridApps(root.appLibrary.sortedEntries(""))
+        root.sortApps()
         if (root.allApps.length > 0) return
       } catch (e) {
         appIndexReady = false
@@ -170,7 +170,14 @@ Item {
       return
     }
     root.allApps = root.buildGridApps(appIndex.apps)
+    root.sortApps()
     if (root.allApps.length === 0) appRetry.restart()
+  }
+
+  function sortApps() {
+    root.allApps.sort(function(a, b) {
+      return String(a.label).localeCompare(String(b.label))
+    })
   }
 
   // ---- unified auto dropdown (apps + files) ----
@@ -220,7 +227,8 @@ Item {
   property int maxVisible: 10
 
   readonly property int cellHeight: Style.space(110)
-  readonly property int gridHeight: root.gridItems.length === 0 ? 0 : Math.ceil(Math.min(root.gridItems.length, root.gridCap) / root.gridCols) * root.cellHeight
+  readonly property int gridRowsVisible: root.gridItems.length === 0 ? 0 : Math.min(root.gridVisibleRows, Math.ceil(root.gridItems.length / root.gridCols))
+  readonly property int gridHeight: root.gridRowsVisible === 0 ? 0 : root.gridRowsVisible * root.cellHeight
 
   readonly property int visibleRows: Math.min(Math.max(0, root.rowsCount), root.maxVisible)
   readonly property bool showHint: root.hintText !== ""
@@ -726,7 +734,8 @@ Item {
             id: appGrid
             visible: root.gridMode && !root.showHint
             clip: true
-            interactive: false
+            interactive: true
+            boundsBehavior: Flickable.StopAtBounds
             width: parent.width
             height: root.gridHeight
             cellWidth: Math.floor(width / root.gridCols)
@@ -776,6 +785,7 @@ Item {
       var cols = root.gridCols
       var next = (event.key === Qt.Key_Down ? root.safeGridIndex + cols : root.safeGridIndex - cols)
       root.gridIndex = Math.max(0, Math.min(next, root.gridItems.length - 1))
+      appGrid.positionViewAtIndex(root.gridIndex, GridView.Contain)
     } else if (event.key === Qt.Key_Left || event.key === Qt.Key_Right) {
       root.gridStep(event.key === Qt.Key_Right ? 1 : -1)
     } else if (event.key === Qt.Key_Tab) {
@@ -788,7 +798,10 @@ Item {
   function gridStep(dir) {
     root.disarmPointer()
     if (root.gridItems.length === 0) return
-    root.gridIndex = Math.max(0, Math.min(root.safeGridIndex + dir, root.gridItems.length - 1))
+    var next = root.safeGridIndex + dir
+    if (next === root.gridIndex) return
+    root.gridIndex = Math.max(0, Math.min(next, root.gridItems.length - 1))
+    appGrid.positionViewAtIndex(root.gridIndex, GridView.Contain)
   }
 
   function listKeys(event) {
