@@ -16,27 +16,18 @@ Item {
 
   signal loaded()
 
-  property var apps: ([])
+property var apps: ([])
   property bool busy: false
+  property var _seen: ({})
 
   function load() {
     if (root.busy) return
     root.busy = true
+    root.apps = []
+    root._seen = ({})
     proc.canceled = false
     proc.command = ["bash", "-c", root.cmd]
     proc.running = true
-  }
-
-  // Same resolution ladder as AppLibrary.iconSource: absolute path, file://
-  // already typed, then themed lookup with a generic fallback.
-  function iconFor(iconName) {
-    var value = String(iconName || "")
-    if (value.length === 0) return Quickshell.iconPath("application-x-executable", true)
-    if (value.indexOf("file://") === 0) return value
-    if (value.charAt(0) === "/") return "file://" + value
-    var themed = Quickshell.iconPath(value, true)
-    if (themed.length > 0) return themed
-    return Quickshell.iconPath("application-x-executable", true)
   }
 
   // Matches AppLibrary.launch: keep the .desktop suffix so ids like
@@ -59,7 +50,7 @@ Item {
     "    /^Name=/ { name=$2 }\n" +
     "    /^Icon=/ { icon=$2 }\n" +
     "    END {\n" +
-    "      if (type != \"\" && type != \"Application\") exit\n" +
+    "      if (type != \"Application\") exit\n" +
     "      if (nod == \"true\" || hid == \"true\") exit\n" +
     "      hide=0\n" +
     "      n=split(osi,a,\";\"); for (i=1;i<=n;i++) if (a[i]==\"KDE\") hide=1\n" +
@@ -75,12 +66,18 @@ Item {
     property bool canceled: false
     stdout: SplitParser {
       onRead: function(line) {
-        if (proc.canceled) return
+        // Line format: APP<tab>id<tab>name<tab>icon
         var parts = String(line).split("\t")
-        if (parts.length < 3) return
-        var id = parts[0]
+        if (parts.length < 4) return
+        var id = parts[1]
         if (!id) return
-        root.apps = root.apps.concat([{ appId: id, label: parts[1], icon: parts[2] || "" }])
+        if (root._seen[id]) return
+        root._seen[id] = true
+        root.apps = root.apps.concat([{
+          appId: id,
+          label: parts[2] || id,
+          icon: parts[3] || ""
+        }])
       }
     }
     onExited: function(exitCode, exitStatus) {

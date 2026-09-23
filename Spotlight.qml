@@ -13,14 +13,16 @@ import "Search.js" as Search
 //
 // Interaction model (UI_SCHEME.md):
 //  - activeTab is a mode: "" (auto), "apps", "files". By default no tab is
-//    active; what you type decides the mode automatically (apps/files/Google).
-//  - Auto mode renders the APPS icon grid; it becomes a live filter while
-//    typing. Picking FILES switches to an fd-backed list.
-//  - The header icons/tabs fade away as soon as the user types.
-//  - Empty query: Left/Right arrows cycle the mode; typing: Up/Down navigate
-//    the grid or list, Tab completes the inline autocomplete, Enter activates.
-//  - Enter in auto mode launches the selected app; with no matches anywhere
-//    (or flag -g) it falls back to a Google search.
+//    active; the mode is detected automatically.
+//  - Opening shows ONLY the query line (+ header icons). No slots, no grid.
+//  - Typing in auto mode opens a unified dropdown: app matches on top, files
+//    below. Enter launches the selected row, or falls back to Google.
+//  - Clicking APPS (or -a) shows the icon grid; the query line keeps working
+//    as the grid filter. Clicking FILES (or -f/-d) shows the fd-backed list.
+//  - The header icons fade away (opacity only, geometry is stable) while
+//    typing, so the text caret never moves or overlaps.
+//  - Left/Right on an empty query cycle the mode, Up/Down navigate the active
+//    list/grid, Tab completes the inline autocomplete, Enter activates.
 Item {
   id: root
 
@@ -31,7 +33,7 @@ Item {
   property string query: ""
   property string activeTab: "" // "" (auto) | "apps" | "files"
   property bool opened: false
-  property int selectedIndex: 0 // list rows (FILES / flags)
+  property int selectedIndex: 0 // list rows (FILES / flags / dropdown)
   property int gridIndex: 0     // APPS grid cell
   property bool _activating: false
 
@@ -42,70 +44,74 @@ Item {
   readonly property string parsedMode: root.parsed.mode
 
   readonly property bool hasFlag: root.flag !== ""
-  readonly property bool fileMode: root.activeTab === "files"
 
-  // Header icon/tabs only stay while the query line is empty.
+  // A flag wins over the tab; otherwise the tab decides.
+  readonly property bool inApps: root.hasFlag
+    ? root.parsedMode === "apps"
+    : root.activeTab === "apps"
+  readonly property bool inFiles: root.hasFlag
+    ? (root.parsedMode === "files" || root.parsedMode === "dirs")
+    : root.activeTab === "files"
+  readonly property bool inAuto: !root.hasFlag && root.activeTab === ""
+
+  // Typing without a flag in auto mode opens the unified dropdown.
+  readonly property bool searchMode: root.inAuto && root.stripped !== ""
+
+  // Header icon/tabs fade (keep geometry) while the user types.
   readonly property bool showTabs: root.query === ""
 
-  // Auto mode (and the APPS tab) render the icon grid; FILES renders a list.
-  readonly property bool gridMode: !root.hasFlag && root.activeTab !== "files"
+  readonly property string listMode: root.inFiles ? "files" : ""
 
-  // Which provider backs the visible list. A typed flag wins over the tab;
-  // -f / -d both land in "files".
-  readonly property string listMode: {
-    if (root.hasFlag) {
-      if (root.parsedMode === "files" || root.parsedMode === "dirs") return "files"
-      return ""
-    }
-    return root.fileMode ? "files" : ""
-  }
+  readonly property bool appsLoading: root.allApps.length === 0
 
   readonly property string hintText: {
-    if (root.gridMode) {
-      if (root.stripped !== "" && root.gridItems.length === 0)
+    if (root.hasFlag) {
+      if (root.parsedMode === "web") return "Search Google for \u201C" + root.stripped + "\u201D"
+      if (root.parsedMode === "run") return "Run: " + root.stripped
+      if (root.parsedMode === "menu") return "Open Omarchy menu and search"
+      if (root.parsedMode === "apps" && root.stripped !== "" && root.gridItems.length === 0)
         return "No app matches \u2014 Enter to search Google"
       return ""
     }
-    if (!root.hasFlag) return ""
-    switch (root.parsedMode) {
-    case "web": return "Search Google for \u201C" + root.stripped + "\u201D"
-    case "run": return "Run: " + root.stripped
-    case "menu": return "Open Omarchy menu and search"
-    }
+    if (root.appsLoading) return ""
+    if (root.inFiles) return ""
+    if (root.searchMode && root.stripped !== "" && root.searchRows.length === 0)
+      return "No matches \u2014 Enter to search Google"
+    if (root.inApps && root.stripped !== "" && root.gridItems.length === 0)
+      return "No app matches \u2014 Enter to search Google"
     return ""
   }
 
   // ---- data ----
   // Host facade for app entries. Some host builds never hand a scoped
-  // appLibrary to third-party menu plugins (null here), so the grid falls back
-  // to the self-contained AppIndex (.desktop scanner).
+  // appLibrary to third-party menu plugins (null here), so the plugin falls
+  // back to the self-contained AppIndex (.desktop scanner) + IconResolver
+  // (our own icon-theme index).
   readonly property var appLibrary: root.shell ? root.shell.appLibrary : null
   property bool appIndexReady: false
-  property bool appIndexEmpty: false
 
   function debugLog(msg) {
     if (Quickshell.env("OMARCHY_SPOTLIGHT_DEBUG") === "1") console.log("[spotlight] " + msg)
   }
 
-  property var allApps: ([])                 // preloaded for the grid
-  property var fileRows: ([])                // fd-backed list
+  property var allApps: ([])                 // preloaded apps for grid/dropdown
+  property var fileRows: ([])                // fd-backed file rows
   property string fileKind: "file"
-  readonly property var fileList: root.listMode === "files" ? root.fileRows : ([])
 
-  // ---- grid ----
+  // ---- app matching ----
   readonly property int gridCols: 6
   readonly property int maxGridRows: 3
   readonly property int gridCap: root.gridCols * root.maxGridRows
 
-  readonly property var gridItems: root.gridItemsFor(root.stripped)
+  readonly property var gridItems: root.appMatches(root.stripped, root.gridCap)
 
-  function gridItemsFor(q) {
-    if (!root.gridMode) return []
-    if (!q) return root.allApps.slice(0, root.gridCap)
-    var ql = String(q).toLowerCase().split(/\s+/).filter(function(w) { return w !== "" })
+  function appMatches(q, cap) {
+    var limit = cap || root.gridCap
+    var ql = String(q || "").toLowerCase().split(/\s+/).filter(function(w) { return w !== "" })
     var out = []
-    for (var i = 0; i < root.allApps.length && out.length < root.gridCap; i++) {
+    for (var i = 0; i < root.allApps.length && out.length < limit; i++) {
       var a = root.allApps[i]
+      if (ql.length === 0) { out.push(a); continue }
       var label = String(a.label).toLowerCase()
       var hit = true
       for (var w = 0; w < ql.length; w++) {
@@ -129,14 +135,15 @@ Item {
         appId: appId,
         label: label,
         subtext: "",
-        iconUrl: it.iconUrl || appIndex.iconFor(icon)
+        iconUrl: it.iconUrl || iconResolver.resolve(icon)
       })
     }
     return out
   }
 
   function ensureApps() {
-    root.debugLog("ensureApps shell=" + (root.shell !== null) + " appLibrary=" + (root.appLibrary !== null) + " allApps=" + root.allApps.length + " appIndexReady=" + root.appIndexReady + " busy=" + appIndex.busy)
+    root.debugLog("ensureApps shell=" + (root.shell !== null) + " appLibrary=" + (root.appLibrary !== null)
+      + " allApps=" + root.allApps.length + " appIndexReady=" + root.appIndexReady + " busy=" + appIndex.busy)
     if (root.allApps.length > 0) return
     if (root.appLibrary) {
       root.appIndexReady = true
@@ -152,15 +159,23 @@ Item {
       return
     }
     root.allApps = root.buildGridApps(appIndex.apps)
-    if (root.allApps.length === 0) {
-      root.appIndexEmpty = true
-      appRetry.restart()
-    }
+    if (root.allApps.length === 0) appRetry.restart()
   }
 
-  // ---- list rows ----
-  readonly property var displayRows: root.fileList
+  // ---- unified auto dropdown (apps + files) ----
+  readonly property var appDropRows: root.appMatches(root.stripped, 6)
+  readonly property var searchRows: {
+    var rows = []
+    var apps = root.appDropRows
+    for (var i = 0; i < apps.length; i++) rows.push(apps[i])
+    for (var j = 0; j < root.fileRows.length && rows.length < 12; j++) rows.push(root.fileRows[j])
+    return rows
+  }
+
+  readonly property var displayRows: root.searchMode ? root.searchRows : (root.inFiles ? root.fileRows : ([]))
   readonly property int rowsCount: root.displayRows.length
+
+  readonly property bool gridMode: root.inApps && !root.showHint
 
   // ---- autocomplete ----
   readonly property int safeGridIndex: root.gridItems.length === 0 ? 0 : Math.max(0, Math.min(root.gridIndex, root.gridItems.length - 1))
@@ -169,15 +184,14 @@ Item {
   readonly property string suggestionText: {
     if (!root.stripped) return ""
     if (root.gridMode) {
-      var a = root.gridItems[root.safeGridIndex]
-      if (!a) return ""
-      if (a.label.toLowerCase().indexOf(root.stripped.toLowerCase()) === 0) return a.label
+      var g = root.gridItems[root.safeGridIndex]
+      if (g && g.label.toLowerCase().indexOf(root.stripped.toLowerCase()) === 0) return g.label
       return ""
     }
-    if (root.listMode === "files") {
-      var f = root.fileRows[root.safeListIndex]
-      if (!f) return ""
-      if (f.path.toLowerCase().indexOf(root.stripped.toLowerCase()) === 0) return f.path
+    var r = root.displayRows[root.safeListIndex]
+    if (r) {
+      if (r.kind === "app" && r.label.toLowerCase().indexOf(root.stripped.toLowerCase()) === 0) return r.label
+      if (r.path && r.path.toLowerCase().indexOf(root.stripped.toLowerCase()) === 0) return r.path
     }
     return ""
   }
@@ -201,6 +215,8 @@ Item {
   readonly property bool showHint: root.hintText !== ""
   readonly property int listHeight: root.visibleRows > 0 ? root.visibleRows * root.rowHeight : 0
   readonly property int contentHeight: {
+    // Auto mode with an empty query is just the line.
+    if (!root.searchMode && !root.inApps && !root.inFiles) return 0
     if (root.showHint) return Style.space(44)
     if (root.gridMode) return root.gridHeight
     return root.listHeight
@@ -239,13 +255,12 @@ Item {
 
   // ---- search ----
   function refreshResults() {
-    root.debugLog("refresh gridMode=" + root.gridMode + " listMode=" + root.listMode + " stripped=\"" + root.stripped + "\" allApps=" + root.allApps.length + " gridItems=" + root.gridItems.length + " fileRows=" + root.fileRows.length)
+    root.debugLog("refresh search=" + root.searchMode + " apps=" + root.inApps + " files=" + root.inFiles
+      + " stripped=\"" + root.stripped + "\" allApps=" + root.allApps.length
+      + " gridItems=" + root.gridItems.length + " rows=" + root.rowsCount + " fileRows=" + root.fileRows.length)
     root.selectedIndex = 0
-    if (root.gridMode) root.ensureApps()
-    if (root.hasFlag && (root.parsedMode === "files" || root.parsedMode === "dirs")) {
-      root.gridIndex = 0
-      searchTimer.restart()
-    } else if (root.listMode === "files") {
+    if (root.inApps || root.searchMode) root.ensureApps()
+    if (root.searchMode || root.inFiles) {
       root.gridIndex = 0
       searchTimer.restart()
     } else {
@@ -255,34 +270,19 @@ Item {
     }
   }
 
-  function loadApps(q, cap) {
-    if (!root.appLibrary) return []
-    var rows = root.appLibrary.sortedEntries(q)
-    var out = []
-    var max = cap || 60
-    for (var i = 0; i < rows.length && out.length < max; i++) {
-      var entry = rows[i].entry
-      var appId = String(entry && entry.id || "")
-      if (!appId) continue
-      var icon = String(entry.icon || "")
-      out.push({
-        kind: "app",
-        appId: appId,
-        label: root.appLibrary.entryName(entry),
-        subtext: root.appLibrary.entrySubtext(entry),
-        iconUrl: icon ? root.appLibrary.iconSource(icon) : ""
-      })
-    }
-    return out
-  }
-
   function runFileSearch() {
-    root.fileKind = root.parsedMode === "dirs" ? "dir" : "file"
+    root.fileKind = root.inFiles && root.parsedMode === "dirs" ? "dir" : "file"
     fileSearch.search(root.fileKind, root.stripped)
   }
 
   function completeSuggestion() {
     if (root.suggestionText !== "") root.query = root.suggestionText
+  }
+
+  function launchApp(g) {
+    root.debugLog("launch " + g.appId)
+    if (root.appLibrary) root.appLibrary.launch(g.appId, g.label)
+    else appIndex.launch(g.appId)
   }
 
   // ---- mode switching ----
@@ -300,8 +300,8 @@ Item {
   }
 
   // ---- activation ----
-  // Enter routes automatically: apps/files open their selection, and any
-  // mode with no matches (or flag -g) falls back to a Google search.
+  // Enter routes automatically: the selected app/file opens, and any mode
+  // with no matches (or flag -g) falls back to a Google search.
   function activate() {
     if (root._activating) return
     root._activating = true
@@ -311,26 +311,34 @@ Item {
         return
       }
       if (!root.stripped) {
-        if (root.listMode === "files" && root.rowsCount > 0) {
+        if (root.inFiles && root.rowsCount > 0) {
           root.runMode("files", "")
         } else {
           root.close()
         }
         return
       }
-      if (root.gridMode) {
+      if (root.inApps) {
         var g = root.gridItems[root.safeGridIndex]
         if (g) {
-          if (root.appLibrary) root.appLibrary.launch(g.appId, g.label)
-          else appIndex.launch(g.appId)
+          root.launchApp(g)
           root.close()
         } else {
           root.runMode("web", root.stripped)
         }
         return
       }
-      var mode = Search.decide(root.activeTab, 0, root.fileRows.length)
-      root.runMode(mode, root.stripped)
+      var r = root.displayRows[root.safeListIndex]
+      if (r) {
+        if (r.kind === "app") {
+          root.launchApp(r)
+        } else {
+          Quickshell.execDetached(["xdg-open", r.path])
+        }
+        root.close()
+      } else {
+        root.runMode("web", root.stripped)
+      }
     } finally {
       root._activating = false
     }
@@ -338,17 +346,15 @@ Item {
 
   function runMode(mode, q) {
     switch (mode) {
-    case "apps":
+    case "apps": {
+      var g = root.gridItems[root.safeGridIndex]
+      if (!g) return
+      root.launchApp(g)
+      root.close()
+      break
+    }
     case "files":
     case "dirs": {
-      if (root.gridMode) {
-        var g = root.gridItems[root.safeGridIndex]
-        if (!g) return
-        if (root.appLibrary) root.appLibrary.launch(g.appId, g.label)
-        else appIndex.launch(g.appId)
-        root.close()
-        break
-      }
       var f = root.fileRows[root.safeListIndex]
       if (!f) return
       Quickshell.execDetached(["xdg-open", f.path])
@@ -385,7 +391,11 @@ Item {
   onQueryChanged: if (root.opened) root.refreshResults()
   onActiveTabChanged: if (root.opened) root.refreshResults()
   onShellChanged: if (root.shell) Qt.callLater(root.ensureApps)
-  Component.onCompleted: Qt.callLater(root.ensureApps)
+  Component.onCompleted: {
+    Qt.callLater(root.ensureApps)
+    Qt.callLater(iconResolver.start)
+    iconResolver.indexed.connect(root.rebuildIcons)
+  }
 
   Timer {
     id: appRetry
@@ -397,7 +407,7 @@ Item {
         appRetry.start()
       } else {
         appRetry.stop()
-        if (root.gridMode) root.refreshResults()
+        if (root.opened) root.refreshResults()
       }
     }
   }
@@ -431,12 +441,27 @@ Item {
     onLoaded: {
       root.debugLog("appIndex loaded apps=" + appIndex.apps.length)
       root.appIndexReady = true
-      if (root.allApps.length === 0) root.allApps = root.buildGridApps(appIndex.apps)
-      root.debugLog("appIndex built allApps=" + root.allApps.length)
+      root.ensureApps()
       if (root.allApps.length === 0) return
       appRetry.stop()
       if (root.opened) root.refreshResults()
     }
+  }
+
+  // Self-contained icon-theme index (app grid + dropdown icons). The index
+  // may finish after the app list is built, so rebuild entries once it's ready
+  // to attach real themed icon paths.
+  IconResolver {
+    id: iconResolver
+  }
+
+  function rebuildIcons() {
+    if (!iconResolver.ready) return
+    if (!root.appIndexReady) return
+    if (root.allApps.length === 0) { root.ensureApps(); return }
+    root.allApps = root.buildGridApps(appIndex.apps)
+    root.debugLog("iconResolver rebuilt allApps=" + root.allApps.length)
+    if (root.opened) root.refreshResults()
   }
 
   // ---- window ----
@@ -487,48 +512,21 @@ Item {
             root.close()
             event.accepted = true
           } else if (root.hasFlag) {
-            if (event.key === Qt.Key_Down || event.key === Qt.Key_Up) {
-              var fdelta = event.key === Qt.Key_Down ? 1 : -1
-              var fn = root.rowsCount
-              if (fn > 0) {
-                root.selectedIndex = (root.safeListIndex + fdelta + fn) % fn
-                event.accepted = true
-              }
-            } else if (event.key === Qt.Key_Tab) {
-              root.completeSuggestion()
-              event.accepted = true
+            if (root.inApps) {
+              root.gridKeys(event)
+            } else {
+              root.listKeys(event)
             }
+            event.accepted = true
+          } else if (root.searchMode || root.inFiles) {
+            root.listKeys(event)
+            event.accepted = true
+          } else if (root.inApps) {
+            root.gridKeys(event)
+            event.accepted = true
           } else if (event.key === Qt.Key_Left || event.key === Qt.Key_Right) {
             root.cycleMode(event.key === Qt.Key_Right ? 1 : -1)
             event.accepted = true
-          } else if (root.gridMode) {
-            if (event.key === Qt.Key_Down || event.key === Qt.Key_Up) {
-              var cols = root.gridCols
-              var next = (event.key === Qt.Key_Down ? root.safeGridIndex + cols : root.safeGridIndex - cols)
-              root.gridIndex = Math.max(0, Math.min(next, root.gridItems.length - 1))
-              event.accepted = true
-            } else if (event.key === Qt.Key_Tab) {
-              root.completeSuggestion()
-              event.accepted = true
-            } else if ((event.key === Qt.Key_Return || event.key === Qt.Key_Enter) && !queryField.activeFocus) {
-              root.activate()
-              event.accepted = true
-            }
-          } else {
-            if (event.key === Qt.Key_Down || event.key === Qt.Key_Up) {
-              var delta = event.key === Qt.Key_Down ? 1 : -1
-              var n = root.rowsCount
-              if (n > 0) {
-                root.selectedIndex = (root.safeListIndex + delta + n) % n
-                event.accepted = true
-              }
-            } else if (event.key === Qt.Key_Tab) {
-              root.completeSuggestion()
-              event.accepted = true
-            } else if ((event.key === Qt.Key_Return || event.key === Qt.Key_Enter) && !queryField.activeFocus) {
-              root.activate()
-              event.accepted = true
-            }
           }
         }
 
@@ -541,21 +539,20 @@ Item {
           height: root.headerHeight - Style.space(8)
           spacing: Style.spacing.sm
 
-          // Icon + tabs collapse (with animation) once the user types.
+          // Icon + tabs fade in place (geometry stays put, so the query line
+          // and the caret never shift or overlap while typing).
           Item {
             id: tabCluster
-            Layout.preferredWidth: root.showTabs ? tabClusterRow.width : 0
+            Layout.preferredWidth: tabClusterRow.width
             Layout.preferredHeight: tabClusterRow.height
             Layout.alignment: Qt.AlignVCenter
             opacity: root.showTabs ? 1 : 0
             enabled: root.showTabs
-            clip: true
             Behavior on opacity { NumberAnimation { duration: 160; easing.type: Easing.OutQuad } }
-            Behavior on Layout.preferredWidth { NumberAnimation { duration: 200; easing.type: Easing.OutQuad } }
 
             RowLayout {
               id: tabClusterRow
-              spacing: Style.spacing.sm
+              spacing: Style.spacing.md
 
               OmarchyIcon {
                 Layout.alignment: Qt.AlignVCenter
@@ -666,6 +663,29 @@ Item {
     }
   }
 
+  function gridKeys(event) {
+    if (event.key === Qt.Key_Down || event.key === Qt.Key_Up) {
+      var cols = root.gridCols
+      var next = (event.key === Qt.Key_Down ? root.safeGridIndex + cols : root.safeGridIndex - cols)
+      root.gridIndex = Math.max(0, Math.min(next, root.gridItems.length - 1))
+    } else if (event.key === Qt.Key_Tab) {
+      root.completeSuggestion()
+    } else if ((event.key === Qt.Key_Return || event.key === Qt.Key_Enter) && !queryField.activeFocus) {
+      root.activate()
+    }
+  }
+
+  function listKeys(event) {
+    if (event.key === Qt.Key_Down || event.key === Qt.Key_Up) {
+      var n = root.rowsCount
+      if (n > 0) root.selectedIndex = (root.safeListIndex + (event.key === Qt.Key_Down ? 1 : -1) + n) % n
+    } else if (event.key === Qt.Key_Tab) {
+      root.completeSuggestion()
+    } else if ((event.key === Qt.Key_Return || event.key === Qt.Key_Enter) && !queryField.activeFocus) {
+      root.activate()
+    }
+  }
+
   // ---- app grid cell ----
   Component {
     id: gridDelegate
@@ -731,13 +751,14 @@ Item {
     }
   }
 
-  // ---- result list row (files / flags) ----
+  // ---- result row (apps in dropdown, files, flags) ----
   Component {
     id: rowDelegate
 
     Item {
       id: rowItem
       readonly property bool isSelected: index === root.safeListIndex
+      readonly property bool isApp: model && model.kind === "app"
       readonly property bool isDir: model && model.kind === "dir"
       readonly property string iconGlyph: rowItem.isDir ? "\uf07b" : "\uf15b"
 
@@ -751,7 +772,23 @@ Item {
         Behavior on color { ColorAnimation { duration: 120 } }
       }
 
+      // App rows show the themed icon; files show a glyph.
+      Image {
+        visible: rowItem.isApp
+        anchors.verticalCenter: parent.verticalCenter
+        anchors.left: parent.left
+        anchors.leftMargin: Style.spacing.rowPaddingX
+        width: Style.space(24)
+        height: Style.space(24)
+        source: rowItem.isApp ? (model.iconUrl || "") : ""
+        asynchronous: true
+        sourceSize.width: width * Screen.devicePixelRatio
+        sourceSize.height: height * Screen.devicePixelRatio
+        fillMode: Image.PreserveAspectFit
+      }
+
       Text {
+        visible: !rowItem.isApp
         anchors.verticalCenter: parent.verticalCenter
         anchors.left: parent.left
         anchors.leftMargin: Style.spacing.rowPaddingX
@@ -771,7 +808,7 @@ Item {
         anchors.leftMargin: Style.space(24) + Style.spacing.rowPaddingX * 2
         anchors.right: parent.right
         anchors.rightMargin: Style.spacing.rowPaddingX
-        text: model && model.path ? model.path : ""
+        text: rowItem.isApp ? (model.label || "") : (model && model.path ? model.path : "")
         font.family: Style.font.family
         font.pixelSize: Style.font.body
         color: rowItem.isSelected ? root.selColor : root.fgColor
