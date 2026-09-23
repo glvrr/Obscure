@@ -648,7 +648,7 @@ Item {
         anchors.leftMargin: Style.space(24) + Style.spacing.rowPaddingX * 2
         anchors.right: parent.right
         anchors.rightMargin: Style.spacing.rowPaddingX
-        text: model.path
+        text: model && model.path ? model.path : ""
         font.family: Style.font.family
         font.pixelSize: Style.font.body
         color: rowItem.isSelected ? root.selColor : root.fgColor
