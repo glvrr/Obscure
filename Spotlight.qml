@@ -259,6 +259,7 @@ Item {
       + " stripped=\"" + root.stripped + "\" allApps=" + root.allApps.length
       + " gridItems=" + root.gridItems.length + " rows=" + root.rowsCount + " fileRows=" + root.fileRows.length)
     root.selectedIndex = 0
+    root.syncViews()
     if (root.inApps || root.searchMode) root.ensureApps()
     if (root.searchMode || root.inFiles) {
       root.gridIndex = 0
@@ -267,6 +268,43 @@ Item {
       fileSearch.cancel()
       root.fileRows = []
       if (root.gridItems.length === 0) root.gridIndex = 0
+    }
+    root.syncViews()
+  }
+
+  // The views consume a real QML ListModel (roles), not a raw JS array:
+  // on this host roles arrived as undefined through model.<key>, leaving
+  // every delegate blank while the JS-side counts were healthy.
+  function syncViews() {
+    root.syncGrid()
+    root.syncResults()
+  }
+
+  function syncGrid() {
+    gridModel.clear()
+    var items = root.gridItems
+    for (var i = 0; i < items.length; i++) {
+      var g = items[i]
+      gridModel.append({
+        kind: g.kind,
+        label: g.label,
+        subtext: g.subtext || "",
+        iconUrl: g.iconUrl || ""
+      })
+    }
+  }
+
+  function syncResults() {
+    resultsModel.clear()
+    var rows = root.displayRows
+    for (var i = 0; i < rows.length; i++) {
+      var r = rows[i]
+      resultsModel.append({
+        kind: r.kind,
+        label: r.label || "",
+        path: r.path || "",
+        iconUrl: r.iconUrl || ""
+      })
     }
   }
 
@@ -431,6 +469,7 @@ Item {
       }
       root.fileRows = rows
       root.selectedIndex = 0
+      root.syncResults()
     }
   }
 
@@ -465,6 +504,9 @@ Item {
   }
 
   // ---- window ----
+  ListModel { id: gridModel }
+  ListModel { id: resultsModel }
+
   PanelWindow {
     id: window
     visible: root.opened
@@ -625,7 +667,7 @@ Item {
             height: root.gridHeight
             cellWidth: Math.floor(width / root.gridCols)
             cellHeight: root.cellHeight
-            model: root.gridItems
+            model: gridModel
             delegate: gridDelegate
 
             add: Transition {
@@ -654,7 +696,7 @@ Item {
               width: parent.width
               height: root.listHeight
               clip: true
-              model: root.displayRows
+              model: resultsModel
               delegate: rowDelegate
             }
           }
@@ -692,7 +734,10 @@ Item {
 
     Item {
       id: gridCell
-      readonly property bool isSelected: index === root.safeGridIndex
+      required property string kind
+      required property string label
+      required property string iconUrl
+      property bool isSelected: index === root.safeGridIndex
 
       width: appGrid.cellWidth
       height: appGrid.cellHeight
@@ -719,7 +764,7 @@ Item {
             anchors.centerIn: parent
             width: Style.space(36)
             height: Style.space(36)
-            source: model.iconUrl || ""
+            source: gridCell.iconUrl
             asynchronous: true
             sourceSize.width: width * Screen.devicePixelRatio
             sourceSize.height: height * Screen.devicePixelRatio
@@ -730,7 +775,7 @@ Item {
         Text {
           anchors.horizontalCenter: parent.horizontalCenter
           width: parent.width
-          text: model.label || ""
+          text: gridCell.label
           font.family: Style.font.family
           font.pixelSize: Style.font.caption
           color: gridCell.isSelected ? root.selColor : root.fgColor
@@ -757,10 +802,14 @@ Item {
 
     Item {
       id: rowItem
-      readonly property bool isSelected: index === root.safeListIndex
-      readonly property bool isApp: model && model.kind === "app"
-      readonly property bool isDir: model && model.kind === "dir"
-      readonly property string iconGlyph: rowItem.isDir ? "\uf07b" : "\uf15b"
+      required property string kind
+      required property string label
+      required property string path
+      required property string iconUrl
+      property bool isSelected: index === root.safeListIndex
+      property bool isApp: rowItem.kind === "app"
+      property bool isDir: rowItem.kind === "dir"
+      property string iconGlyph: rowItem.isDir ? "\uf07b" : "\uf15b"
 
       height: root.rowHeight
       width: ListView.view.width
@@ -780,7 +829,7 @@ Item {
         anchors.leftMargin: Style.spacing.rowPaddingX
         width: Style.space(24)
         height: Style.space(24)
-        source: rowItem.isApp ? (model.iconUrl || "") : ""
+        source: rowItem.isApp ? rowItem.iconUrl : ""
         asynchronous: true
         sourceSize.width: width * Screen.devicePixelRatio
         sourceSize.height: height * Screen.devicePixelRatio
@@ -808,7 +857,7 @@ Item {
         anchors.leftMargin: Style.space(24) + Style.spacing.rowPaddingX * 2
         anchors.right: parent.right
         anchors.rightMargin: Style.spacing.rowPaddingX
-        text: rowItem.isApp ? (model.label || "") : (model && model.path ? model.path : "")
+        text: rowItem.isApp ? rowItem.label : rowItem.path
         font.family: Style.font.family
         font.pixelSize: Style.font.body
         color: rowItem.isSelected ? root.selColor : root.fgColor
