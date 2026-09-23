@@ -47,6 +47,10 @@ Item {
   // selected) and Up on the first row returns to mode cycling. Left/Right move
   // cells only while engaged, otherwise they keep cycling APPS/FILES.
   property bool gridEngaged: false
+  // Header focus position when the query line is idle: "" (auto) | "apps" |
+  // "files" | "omarchy". Arrows cycle through it; only "omarchy" highlights
+  // the O island and Enter stays inert there (highlight-only).
+  property string headerPos: ""
 
   // ---- parsed query + mode resolution ----
   readonly property var parsed: Flags.parseQuery(root.query)
@@ -288,6 +292,7 @@ Item {
       + " stripped=\"" + root.stripped + "\" allApps=" + root.allApps.length
       + " gridItems=" + root.gridItems.length + " rows=" + root.rowsCount + " fileRows=" + root.fileRows.length)
     root.gridEngaged = false
+    if (root.hasFlag || root.stripped !== "") root.headerPos = ""
     root.selectedIndex = 0
     root.disarmPointer()
     root.syncViews()
@@ -356,11 +361,14 @@ Item {
 
   // ---- mode switching ----
   function cycleMode(dir) {
-    var order = ["", "apps", "files"]
-    var i = order.indexOf(root.activeTab)
+    var order = ["", "apps", "files", "omarchy"]
+    var i = order.indexOf(root.headerPos)
     if (i < 0) i = 0
     root.gridEngaged = false
-    root.activeTab = order[(i + dir + order.length) % order.length]
+    root.headerPos = order[(i + dir + order.length) % order.length]
+    if (root.headerPos === "apps") root.activeTab = "apps"
+    else if (root.headerPos === "files") root.activeTab = "files"
+    else root.activeTab = ""
     queryField.forceActiveFocus()
   }
 
@@ -382,6 +390,9 @@ Item {
   function activate() {
     if (root._opening) return
     if (root._activating) return
+    // The O island is highlight-only: Enter there (idle query line) does
+    // nothing and does not close the card.
+    if (root.headerPos === "omarchy" && !root.hasFlag && root.stripped === "") return
     root._activating = true
     try {
       if (root.hasFlag) {
@@ -684,6 +695,7 @@ Item {
 
               OmarchyIcon {
                 Layout.alignment: Qt.AlignVCenter
+                active: root.headerPos === "omarchy"
                 onClicked: root.openOmarchy()
               }
 

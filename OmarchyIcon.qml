@@ -6,6 +6,7 @@ import qs.Ui
 Item {
   id: root
 
+  property bool active: false
   signal clicked()
 
   readonly property bool hot: mouseArea.containsMouse
@@ -17,16 +18,16 @@ Item {
     id: pill
     anchors.fill: parent
     radius: Math.max(2, Style.cornerRadius)
-    color: root.hot ? Style.hoverFill : Style.normalFill
+    color: root.active ? Color.menu.selectedBackground : (root.hot ? Style.hoverFill : Style.normalFill)
     border.width: Math.max(1, Style.space(1))
-    border.color: root.hot ? Style.hoverBorderColor : Style.normalBorderColor
+    border.color: root.active ? Color.menu.border : (root.hot ? Style.hoverBorderColor : Style.normalBorderColor)
 
     Text {
       anchors.centerIn: parent
       text: "\ue900"
       font.family: "omarchy"
       font.pixelSize: Style.font.iconLarge
-      color: root.hot ? Color.foreground : Color.menu.text
+      color: root.active ? Color.accent : (root.hot ? Color.foreground : Color.menu.text)
       verticalAlignment: Text.AlignVCenter
     }
   }
