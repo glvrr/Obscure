@@ -53,8 +53,8 @@ TextField {
       case "apps": return "Search apps..."
       }
     }
-    if (root.tabMode === "files") return "Search files...  (-f file  -d dir  -g web  -r run)"
-    return "Search apps...  (-f file  -d dir  -g web  -a apps  -o menu  -r run)"
+    if (root.tabMode === "files") return "Search files...  (-f file  -d dir  -g web  -r run  -. hidden)"
+    return "Search apps...  (-f file  -d dir  -g web  -a apps  -o menu  -r run  -. hidden)"
   }
 
   // ---- inline autocomplete ----

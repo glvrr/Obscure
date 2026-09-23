@@ -53,6 +53,7 @@ Item {
   readonly property string flag: root.parsed.flag
   readonly property string stripped: root.parsed.query
   readonly property string parsedMode: root.parsed.mode
+  readonly property bool hidden: root.parsed.hidden
 
   readonly property bool hasFlag: root.flag !== ""
 
@@ -340,7 +341,7 @@ Item {
 
   function runFileSearch() {
     root.fileKind = root.inFiles && root.parsedMode === "dirs" ? "dir" : "file"
-    fileSearch.search(root.fileKind, root.stripped)
+    fileSearch.search(root.fileKind, root.stripped, root.hidden)
   }
 
   function completeSuggestion() {
