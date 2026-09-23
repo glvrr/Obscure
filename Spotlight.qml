@@ -99,6 +99,10 @@ Item {
   property string fileKind: "file"
 
   // ---- app matching ----
+  // Opens files with their default handler; routes Terminal=true handlers
+  // into the configured terminal (see open-file.sh).
+  readonly property string openScript: String(Qt.resolvedUrl("open-file.sh")).replace(/^file:\/\//, "")
+
   readonly property int gridCols: 6
   readonly property int maxGridRows: 3
   readonly property int gridCap: root.gridCols * root.maxGridRows
@@ -386,8 +390,8 @@ Item {
         if (r.kind === "app") {
           root.launchApp(r)
         } else {
-          root.plainLog("xdg-open argv=" + JSON.stringify(["xdg-open", r.path]))
-          Quickshell.execDetached(["xdg-open", r.path])
+          root.plainLog("open-file " + JSON.stringify(r.path))
+          Quickshell.execDetached([root.openScript, r.path])
         }
         root.close()
       } else {
@@ -412,8 +416,8 @@ Item {
     case "dirs": {
       var f = root.fileRows[root.safeListIndex]
       if (!f) return
-      root.plainLog("xdg-open argv=" + JSON.stringify(["xdg-open", f.path]))
-      Quickshell.execDetached(["xdg-open", f.path])
+      root.plainLog("open-file " + JSON.stringify(f.path))
+      Quickshell.execDetached([root.openScript, f.path])
       root.close()
       break
     }
