@@ -358,9 +358,17 @@ Item {
       if (!root.stripped) {
         if (root.inFiles && root.rowsCount > 0) {
           root.runMode("files", "")
-        } else {
-          root.close()
+          return
         }
+        // Auto mode: the grid is the primary content. Clicking (or Enter on)
+        // the highlighted cell must launch, not just close the card.
+        var g0 = root.gridItems[root.safeGridIndex]
+        if (g0) {
+          root.launchApp(g0)
+          root.close()
+          return
+        }
+        root.close()
         return
       }
       if (root.inApps) {
