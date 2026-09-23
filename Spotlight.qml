@@ -36,6 +36,11 @@ Item {
   property int selectedIndex: 0 // list rows (FILES / flags / dropdown)
   property int gridIndex: 0     // APPS grid cell
   property bool _activating: false
+  // Latch set the moment a launch/open is dispatched. The card starts closing
+  // instantly and the list reflows beneath the cursor, so the releasing half
+  // of a single physical click can land on a different row and activate it a
+  // second time. Open() clears the latch for the next summon.
+  property bool _opening: false
 
   // ---- parsed query + mode resolution ----
   readonly property var parsed: Flags.parseQuery(root.query)
@@ -230,6 +235,7 @@ Item {
   function open(payloadJson) {
     var payload = ({})
     try { payload = JSON.parse(payloadJson || "{}") } catch (e) { payload = ({}) }
+    root._opening = false
     root.query = String(payload.query || "")
     root.activeTab = payload.tab === "files" ? "files" : payload.tab === "apps" ? "apps" : ""
     root.selectedIndex = 0
@@ -352,6 +358,7 @@ Item {
     root.plainLog("activate called flag=" + JSON.stringify(root.flag) + " mode=" + root.parsedMode
       + " stripped=" + JSON.stringify(root.stripped) + " selIdx=" + root.safeListIndex
       + " gridIdx=" + root.safeGridIndex + " rows=" + root.rowsCount + " grid=" + root.gridItems.length)
+    if (root._opening) return
     if (root._activating) return
     root._activating = true
     try {
@@ -368,6 +375,7 @@ Item {
         // the highlighted cell must launch, not just close the card.
         var g0 = root.gridItems[root.safeGridIndex]
         if (g0) {
+          root._opening = true
           root.launchApp(g0)
           root.close()
           return
@@ -378,6 +386,7 @@ Item {
       if (root.inApps) {
         var g = root.gridItems[root.safeGridIndex]
         if (g) {
+          root._opening = true
           root.launchApp(g)
           root.close()
         } else {
@@ -387,6 +396,7 @@ Item {
       }
       var r = root.displayRows[root.safeListIndex]
       if (r) {
+        root._opening = true
         if (r.kind === "app") {
           root.launchApp(r)
         } else {
@@ -408,6 +418,7 @@ Item {
     case "apps": {
       var g = root.gridItems[root.safeGridIndex]
       if (!g) return
+      root._opening = true
       root.launchApp(g)
       root.close()
       break
@@ -416,6 +427,7 @@ Item {
     case "dirs": {
       var f = root.fileRows[root.safeListIndex]
       if (!f) return
+      root._opening = true
       root.plainLog("open-file " + JSON.stringify(f.path))
       Quickshell.execDetached([root.openScript, f.path])
       root.close()
@@ -423,12 +435,14 @@ Item {
     }
     case "web": {
       if (!q) return
+      root._opening = true
       Quickshell.execDetached(["omarchy", "launch", "browser", Search.googleUrl(q)])
       root.close()
       break
     }
     case "run": {
       if (!q) return
+      root._opening = true
       Quickshell.execDetached(["bash", "-lc", q])
       root.close()
       break
