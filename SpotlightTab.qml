@@ -53,7 +53,7 @@ Item {
       anchors.verticalCenter: parent.verticalCenter
       text: root.text
       font.family: Style.font.family
-      font.pixelSize: Style.font.caption
+      font.pixelSize: Style.font.body
       font.bold: root.active
       color: root.active ? Color.accent : Color.foreground
     }

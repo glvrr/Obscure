@@ -25,7 +25,7 @@ Item {
       anchors.centerIn: parent
       text: "\ue900"
       font.family: "omarchy"
-      font.pixelSize: Style.font.icon
+      font.pixelSize: Style.font.iconLarge
       color: root.hot ? Color.foreground : Color.menu.text
       verticalAlignment: Text.AlignVCenter
     }

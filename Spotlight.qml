@@ -216,15 +216,16 @@ Item {
   readonly property color selColor: Color.menu.selectedText
 
   property int headerHeight: Math.max(Style.space(46), Style.spacing.controlHeight + Style.spacing.md * 2)
-  property int rowHeight: Style.space(46)
+  property int rowHeight: Style.space(50)
   property int maxVisible: 10
 
-  readonly property int cellHeight: Style.space(96)
+  readonly property int cellHeight: Style.space(110)
   readonly property int gridHeight: root.gridItems.length === 0 ? 0 : Math.ceil(Math.min(root.gridItems.length, root.gridCap) / root.gridCols) * root.cellHeight
 
   readonly property int visibleRows: Math.min(Math.max(0, root.rowsCount), root.maxVisible)
   readonly property bool showHint: root.hintText !== ""
-  readonly property int listHeight: root.visibleRows > 0 ? root.visibleRows * root.rowHeight : 0
+  readonly property int rowSpacing: Style.spacing.xs
+  readonly property int listHeight: root.visibleRows > 0 ? root.visibleRows * root.rowHeight + (root.visibleRows - 1) * root.rowSpacing : 0
   readonly property int contentHeight: {
     // Auto mode with an empty query is just the line.
     if (!root.searchMode && !root.inApps && !root.inFiles) return 0
@@ -757,6 +758,7 @@ Item {
               width: parent.width
               height: root.listHeight
               clip: true
+              spacing: root.rowSpacing
               model: resultsModel
               delegate: rowDelegate
             }
@@ -813,21 +815,21 @@ Item {
 
         Item {
           width: parent.width
-          height: Style.space(52)
+          height: Style.space(64)
 
           Rectangle {
             anchors.centerIn: parent
-            width: Style.space(52)
-            height: Style.space(52)
-            radius: Math.max(2, (height - Style.space(4)) / 2)
+            width: Style.space(64)
+            height: Style.space(64)
+            radius: Math.max(2, Style.cornerRadius)
             color: gridCell.isSelected ? Color.menu.selectedBackground : "transparent"
             Behavior on color { ColorAnimation { duration: 120 } }
           }
 
           Image {
             anchors.centerIn: parent
-            width: Style.space(36)
-            height: Style.space(36)
+            width: Style.space(40)
+            height: Style.space(40)
             source: gridCell.iconUrl
             asynchronous: true
             sourceSize.width: width * Screen.devicePixelRatio
@@ -841,7 +843,7 @@ Item {
           width: parent.width
           text: gridCell.label
           font.family: Style.font.family
-          font.pixelSize: Style.font.caption
+          font.pixelSize: Style.font.bodySmall
           color: gridCell.isSelected ? root.selColor : root.fgColor
           elide: Text.ElideMiddle
           horizontalAlignment: Text.AlignHCenter
@@ -881,7 +883,7 @@ Item {
 
       Rectangle {
         anchors.fill: parent
-        radius: Math.max(2, (height - Style.space(4)) / 2)
+        radius: Math.max(2, Style.cornerRadius)
         color: rowItem.isSelected ? Color.menu.selectedBackground : "transparent"
         Behavior on color { ColorAnimation { duration: 120 } }
       }
@@ -892,8 +894,8 @@ Item {
         anchors.verticalCenter: parent.verticalCenter
         anchors.left: parent.left
         anchors.leftMargin: Style.spacing.rowPaddingX
-        width: Style.space(24)
-        height: Style.space(24)
+        width: Style.space(36)
+        height: Style.space(36)
         source: rowItem.isApp ? rowItem.iconUrl : ""
         asynchronous: true
         sourceSize.width: width * Screen.devicePixelRatio
@@ -906,7 +908,7 @@ Item {
         anchors.verticalCenter: parent.verticalCenter
         anchors.left: parent.left
         anchors.leftMargin: Style.spacing.rowPaddingX
-        width: Style.space(24)
+        width: Style.space(36)
         text: rowItem.iconGlyph
         font.family: Style.font.menuFamily
         font.pixelSize: Style.font.iconLarge
@@ -919,12 +921,13 @@ Item {
         id: titleText
         anchors.verticalCenter: parent.verticalCenter
         anchors.left: parent.left
-        anchors.leftMargin: Style.space(24) + Style.spacing.rowPaddingX * 2
+        anchors.leftMargin: Style.spacing.rowPaddingX + Style.space(36) + Style.spacing.labelGap
         anchors.right: parent.right
         anchors.rightMargin: Style.spacing.rowPaddingX
         text: rowItem.isApp ? rowItem.label : rowItem.path
         font.family: Style.font.family
-        font.pixelSize: Style.font.body
+        font.pixelSize: Style.font.heading
+        font.weight: Font.Medium
         color: rowItem.isSelected ? root.selColor : root.fgColor
         elide: Text.ElideMiddle
       }
