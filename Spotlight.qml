@@ -686,12 +686,14 @@ Item {
             Layout.fillWidth: true
             Layout.alignment: Qt.AlignVCenter
             tabMode: root.activeTab
+            gridActive: root.gridMode
             text: root.query
             suggestion: root.suggestionText
             onTextChanged: root.query = queryField.text
             onActivate: root.activate()
             onTabComplete: root.completeSuggestion()
             onCycleMode: root.cycleMode(dir)
+            onNavigateGrid: root.gridStep(dir)
           }
         }
 
@@ -774,11 +776,19 @@ Item {
       var cols = root.gridCols
       var next = (event.key === Qt.Key_Down ? root.safeGridIndex + cols : root.safeGridIndex - cols)
       root.gridIndex = Math.max(0, Math.min(next, root.gridItems.length - 1))
+    } else if (event.key === Qt.Key_Left || event.key === Qt.Key_Right) {
+      root.gridStep(event.key === Qt.Key_Right ? 1 : -1)
     } else if (event.key === Qt.Key_Tab) {
       root.completeSuggestion()
     } else if ((event.key === Qt.Key_Return || event.key === Qt.Key_Enter) && !queryField.activeFocus) {
       root.activate()
     }
+  }
+
+  function gridStep(dir) {
+    root.disarmPointer()
+    if (root.gridItems.length === 0) return
+    root.gridIndex = Math.max(0, Math.min(root.safeGridIndex + dir, root.gridItems.length - 1))
   }
 
   function listKeys(event) {

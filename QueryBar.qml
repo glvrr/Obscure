@@ -11,6 +11,7 @@ TextField {
 
   property string tabMode: "apps"
   property string suggestion: ""
+  property bool gridActive: false
   readonly property var parsed: Flags.parseQuery(root.text)
   readonly property string flag: root.parsed.flag
   readonly property string stripped: root.parsed.query
@@ -19,6 +20,7 @@ TextField {
   signal activate()
   signal tabComplete()
   signal cycleMode(int dir)
+  signal navigateGrid(int dir)
 
   placeholderText: root.placeholderFor()
   selectByMouse: true
@@ -27,7 +29,12 @@ TextField {
 
   Keys.onPressed: function(event) {
     if (root.text === "" && (event.key === Qt.Key_Left || event.key === Qt.Key_Right)) {
-      root.cycleMode(event.key === Qt.Key_Right ? 1 : -1)
+      var dir = event.key === Qt.Key_Right ? 1 : -1
+      if (root.gridActive) {
+        root.navigateGrid(dir)
+      } else {
+        root.cycleMode(dir)
+      }
       event.accepted = true
     } else if (event.key === Qt.Key_Tab && root.suggestion !== "" && root.suggestion !== root.text) {
       root.tabComplete()
