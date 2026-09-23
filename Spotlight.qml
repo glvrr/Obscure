@@ -340,7 +340,7 @@ Item {
 
   // ---- activation ----
   // Always-on diagnostic line (temporary). Remove after launch bug is fixed.
-  function plainLog(msg) { Console.log("SPL: " + msg) }
+  function plainLog(msg) { console.log("SPL: " + msg) }
 
   // Enter routes automatically: the selected app/file opens, and any mode
   // with no matches (or flag -g) falls back to a Google search.
