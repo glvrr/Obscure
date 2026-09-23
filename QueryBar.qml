@@ -18,13 +18,17 @@ TextField {
 
   signal activate()
   signal tabComplete()
+  signal cycleMode(int dir)
 
   placeholderText: root.placeholderFor()
   selectByMouse: true
   onAccepted: root.activate()
 
   Keys.onPressed: function(event) {
-    if (event.key === Qt.Key_Tab && root.suggestion !== "" && root.suggestion !== root.text) {
+    if (root.text === "" && (event.key === Qt.Key_Left || event.key === Qt.Key_Right)) {
+      root.cycleMode(event.key === Qt.Key_Right ? 1 : -1)
+      event.accepted = true
+    } else if (event.key === Qt.Key_Tab && root.suggestion !== "" && root.suggestion !== root.text) {
       root.tabComplete()
       event.accepted = true
     }

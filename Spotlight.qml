@@ -527,6 +527,7 @@ Item {
             onTextChanged: root.query = queryField.text
             onActivate: root.activate()
             onTabComplete: root.completeSuggestion()
+            onCycleMode: root.cycleMode(dir)
           }
         }
 
