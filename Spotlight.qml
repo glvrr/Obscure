@@ -240,6 +240,7 @@ Item {
     root.activeTab = payload.tab === "files" ? "files" : payload.tab === "apps" ? "apps" : ""
     root.selectedIndex = 0
     root.gridIndex = 0
+    root.disarmPointer()
     root.ensureApps()
     root.opened = true
     root.refreshResults()
@@ -269,6 +270,7 @@ Item {
       + " stripped=\"" + root.stripped + "\" allApps=" + root.allApps.length
       + " gridItems=" + root.gridItems.length + " rows=" + root.rowsCount + " fileRows=" + root.fileRows.length)
     root.selectedIndex = 0
+    root.disarmPointer()
     root.syncViews()
     if (root.inApps || root.searchMode) root.ensureApps()
     if (root.searchMode || root.inFiles) {
@@ -328,10 +330,9 @@ Item {
   }
 
   function launchApp(g) {
-    root.plainLog("launchApp appId=" + JSON.stringify(String(g.appId)) + " appLibrary=" + (root.appLibrary !== null))
+    root.debugLog("launch " + g.appId)
     if (root.appLibrary) root.appLibrary.launch(g.appId, g.label)
     else appIndex.launch(g.appId)
-    root.plainLog("launchApp exec dispatched")
   }
 
   // ---- mode switching ----
@@ -349,15 +350,9 @@ Item {
   }
 
   // ---- activation ----
-  // Always-on diagnostic line (temporary). Remove after launch bug is fixed.
-  function plainLog(msg) { console.log("SPL: " + msg) }
-
   // Enter routes automatically: the selected app/file opens, and any mode
   // with no matches (or flag -g) falls back to a Google search.
   function activate() {
-    root.plainLog("activate called flag=" + JSON.stringify(root.flag) + " mode=" + root.parsedMode
-      + " stripped=" + JSON.stringify(root.stripped) + " selIdx=" + root.safeListIndex
-      + " gridIdx=" + root.safeGridIndex + " rows=" + root.rowsCount + " grid=" + root.gridItems.length)
     if (root._opening) return
     if (root._activating) return
     root._activating = true
@@ -400,7 +395,6 @@ Item {
         if (r.kind === "app") {
           root.launchApp(r)
         } else {
-          root.plainLog("open-file " + JSON.stringify(r.path))
           Quickshell.execDetached([root.openScript, r.path])
         }
         root.close()
@@ -413,7 +407,6 @@ Item {
   }
 
   function runMode(mode, q) {
-    root.plainLog("runMode mode=" + mode + " q=" + JSON.stringify(q))
     switch (mode) {
     case "apps": {
       var g = root.gridItems[root.safeGridIndex]
@@ -428,7 +421,6 @@ Item {
       var f = root.fileRows[root.safeListIndex]
       if (!f) return
       root._opening = true
-      root.plainLog("open-file " + JSON.stringify(f.path))
       Quickshell.execDetached([root.openScript, f.path])
       root.close()
       break
@@ -542,6 +534,25 @@ Item {
   // ---- window ----
   ListModel { id: gridModel }
   ListModel { id: resultsModel }
+
+  // Filters synthetic hover churn: when the query refreshes and rows reflow
+  // beneath a stationary pointer, each relocated delegate spuriously fires
+  // hover. Selection follows the cursor only after real pointer travel, and
+  // keyboard/query actions disarm the gate so a resting mouse can't hijack it.
+  PointerMoveGate {
+    id: pointerGate
+    referenceItem: card
+  }
+
+  function disarmPointer() { pointerGate.reset() }
+
+  function selectFromRow(item, index, mouse) {
+    if (pointerGate.moved(item, mouse)) root.selectedIndex = index
+  }
+
+  function selectGridFromPointer(item, index, mouse) {
+    if (pointerGate.moved(item, mouse)) root.gridIndex = index
+  }
 
   PanelWindow {
     id: window
@@ -742,6 +753,7 @@ Item {
   }
 
   function gridKeys(event) {
+    root.disarmPointer()
     if (event.key === Qt.Key_Down || event.key === Qt.Key_Up) {
       var cols = root.gridCols
       var next = (event.key === Qt.Key_Down ? root.safeGridIndex + cols : root.safeGridIndex - cols)
@@ -754,6 +766,7 @@ Item {
   }
 
   function listKeys(event) {
+    root.disarmPointer()
     if (event.key === Qt.Key_Down || event.key === Qt.Key_Up) {
       var n = root.rowsCount
       if (n > 0) root.selectedIndex = (root.safeListIndex + (event.key === Qt.Key_Down ? 1 : -1) + n) % n
@@ -824,7 +837,7 @@ Item {
       MouseArea {
         anchors.fill: parent
         hoverEnabled: true
-        onHoveredChanged: if (containsMouse) root.gridIndex = index
+        onPositionChanged: function(mouse) { root.selectGridFromPointer(gridCell, index, mouse) }
         onClicked: {
           root.gridIndex = index
           root.activate()
@@ -905,7 +918,7 @@ Item {
       MouseArea {
         anchors.fill: parent
         hoverEnabled: true
-        onHoveredChanged: if (containsMouse) root.selectedIndex = index
+        onPositionChanged: function(mouse) { root.selectFromRow(rowItem, index, mouse) }
         onClicked: {
           root.selectedIndex = index
           root.activate()

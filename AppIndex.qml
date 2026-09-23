@@ -30,10 +30,9 @@ property var apps: ([])
     proc.running = true
   }
 
-  // Matches AppLibrary.launch: keep the .desktop suffix so ids like
+// Matches AppLibrary.launch: keep the .desktop suffix so ids like
   // org.telegram.desktop resolve, under a graphical scope.
   function launch(appId) {
-    console.log("SPL: AppIndex.launch argv=" + JSON.stringify(["uwsm-app", "--", "gtk-launch", String(appId) + ".desktop"]))
     Quickshell.execDetached(["uwsm-app", "--", "gtk-launch", String(appId) + ".desktop"])
   }
 
