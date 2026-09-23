@@ -4,8 +4,12 @@ import Quickshell.Io
 
 // Async fd-based file/dir search. Paths come back line-by-line through a
 // SplitParser; a fresh search cancels whatever is still running.
-QtObject {
+// Root is an invisible Item (not QtObject): Process/SplitParser must be
+// declared as children of a type with a default `data` property.
+Item {
   id: root
+
+  visible: false
 
   signal done()
 
@@ -16,7 +20,6 @@ QtObject {
   // kind: "file" | "dir". Empty query -> recent, shallow files.
   function search(kind, query) {
     root.kind = kind
-    root.canceled = false
 
     var target = kind === "dir" ? "d" : "f"
     var args = ["fd", "-t", target, "-H", "--max-results", "60"]
