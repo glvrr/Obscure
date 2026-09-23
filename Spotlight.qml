@@ -19,8 +19,9 @@ import "Search.js" as Search
 //    below. Enter launches the selected row, or falls back to Google.
 //  - Clicking APPS (or -a) shows the icon grid; the query line keeps working
 //    as the grid filter. Clicking FILES (or -f/-d) shows the fd-backed list.
-//  - The header icons fade away (opacity only, geometry is stable) while
-//    typing, so the text caret never moves or overlaps.
+//  - The header islands (O / APPS / FILES) collapse in width while typing or
+//    under a flag, and the query line grows to the full card width in the
+//    same animation, so the caret never shifts or overlaps.
 //  - Left/Right on an empty query cycle the mode, Up/Down navigate the active
 //    list/grid, Tab completes the inline autocomplete, Enter activates.
 Item {
@@ -62,8 +63,9 @@ Item {
   // Typing without a flag in auto mode opens the unified dropdown.
   readonly property bool searchMode: root.inAuto && root.stripped !== ""
 
-  // Header icon/tabs fade (keep geometry) while the user types.
-  readonly property bool showTabs: root.query === ""
+  // Header islands (O / APPS / FILES) collapse away while typing or while a
+  // flag is active; the query line grows to the full card width in sync.
+  readonly property bool showTabs: root.query === "" && !root.hasFlag
 
   readonly property string listMode: root.inFiles ? "files" : ""
 
@@ -349,6 +351,11 @@ Item {
     queryField.forceActiveFocus()
   }
 
+  function toggleTab(mode) {
+    root.activeTab = root.activeTab === mode ? "" : mode
+    queryField.forceActiveFocus()
+  }
+
   // ---- activation ----
   // Enter routes automatically: the selected app/file opens, and any mode
   // with no matches (or flag -g) falls back to a Google search.
@@ -626,22 +633,26 @@ Item {
           anchors.left: parent.left
           anchors.right: parent.right
           height: root.headerHeight - Style.space(8)
-          spacing: Style.spacing.sm
+          spacing: Style.spacing.lg
 
-          // Icon + tabs fade in place (geometry stays put, so the query line
-          // and the caret never shift or overlap while typing).
+          // Header islands. Each icon is its own capsule; typing or a flag
+          // collapses the whole cluster in width while the query line takes
+          // the freed space in the same animation (no overlap, text stays
+          // pinned to the left edge).
           Item {
             id: tabCluster
-            Layout.preferredWidth: tabClusterRow.width
+            Layout.preferredWidth: root.showTabs ? tabClusterRow.width : 0
             Layout.preferredHeight: tabClusterRow.height
             Layout.alignment: Qt.AlignVCenter
+            clip: true
             opacity: root.showTabs ? 1 : 0
             enabled: root.showTabs
-            Behavior on opacity { NumberAnimation { duration: 160; easing.type: Easing.OutQuad } }
+            Behavior on Layout.preferredWidth { NumberAnimation { duration: 180; easing.type: Easing.InOutQuad } }
+            Behavior on opacity { NumberAnimation { duration: 140; easing.type: Easing.OutQuad } }
 
             RowLayout {
               id: tabClusterRow
-              spacing: Style.spacing.md
+              spacing: Style.spacing.lg
 
               OmarchyIcon {
                 Layout.alignment: Qt.AlignVCenter
@@ -653,7 +664,7 @@ Item {
                 text: "APPS"
                 icon: "\uf00a"
                 active: !root.hasFlag && root.activeTab === "apps"
-                onClicked: root.setTab("apps")
+                onClicked: root.toggleTab("apps")
               }
 
               SpotlightTab {
@@ -661,7 +672,7 @@ Item {
                 text: "FILES"
                 icon: "\uf07b"
                 active: !root.hasFlag && root.activeTab === "files"
-                onClicked: root.setTab("files")
+                onClicked: root.toggleTab("files")
               }
             }
           }

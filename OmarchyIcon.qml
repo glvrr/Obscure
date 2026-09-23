@@ -17,16 +17,16 @@ Item {
     id: pill
     anchors.fill: parent
     radius: Math.max(2, height / 2)
-    color: root.hot ? Style.hoverFill : "transparent"
-    border.width: root.hot ? Math.max(1, Style.space(1)) : 0
-    border.color: Color.menu.border
+    color: root.hot ? Style.hoverFill : Style.normalFill
+    border.width: Math.max(1, Style.space(1))
+    border.color: root.hot ? Style.hoverBorderColor : Style.normalBorderColor
 
     Text {
       anchors.centerIn: parent
       text: "\ue900"
       font.family: "omarchy"
       font.pixelSize: Style.font.icon
-      color: Color.foreground
+      color: root.hot ? Color.foreground : Color.menu.text
       verticalAlignment: Text.AlignVCenter
     }
   }
