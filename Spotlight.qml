@@ -260,6 +260,7 @@ Item {
     try { payload = JSON.parse(payloadJson || "{}") } catch (e) { payload = ({}) }
     root._opening = false
     root.query = String(payload.query || "")
+    root.headerPos = ""
     root.activeTab = payload.tab === "files" ? "files" : payload.tab === "apps" ? "apps" : ""
     root.selectedIndex = 0
     root.gridIndex = 0
@@ -362,7 +363,9 @@ Item {
 
   // ---- mode switching ----
   function cycleMode(dir) {
-    var order = ["", "apps", "files", "omarchy"]
+    // Visual order of the header islands: O -> APPS -> FILES, then the idle
+    // query line ("auto"); the cycle wraps auto -> O. Default on open is auto.
+    var order = ["omarchy", "apps", "files", ""]
     var i = order.indexOf(root.headerPos)
     if (i < 0) i = 0
     root.gridEngaged = false
