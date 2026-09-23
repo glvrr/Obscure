@@ -13,3 +13,7 @@ function decide(tabMode, appCount, fileCount) {
 function googleUrl(query) {
   return "https://www.google.com/search?q=" + encodeURIComponent(String(query || ""))
 }
+
+function pinterestUrl(query) {
+  return "https://www.pinterest.com/search/pins/?q=" + encodeURIComponent(String(query || ""))
+}

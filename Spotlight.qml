@@ -84,6 +84,7 @@ Item {
   readonly property string hintText: {
     if (root.hasFlag) {
       if (root.parsedMode === "web") return "Search Google for \u201C" + root.stripped + "\u201D"
+      if (root.parsedMode === "pinterest") return "Search Pinterest for \u201C" + root.stripped + "\u201D"
       if (root.parsedMode === "run") return "Run: " + root.stripped
       if (root.parsedMode === "menu") return "Open Omarchy menu and search"
       if (root.parsedMode === "apps" && root.stripped !== "" && root.gridItems.length === 0)
@@ -469,6 +470,13 @@ Item {
       if (!q) return
       root._opening = true
       Quickshell.execDetached(["omarchy", "launch", "browser", Search.googleUrl(q)])
+      root.close()
+      break
+    }
+    case "pinterest": {
+      if (!q) return
+      root._opening = true
+      Quickshell.execDetached(["omarchy", "launch", "browser", Search.pinterestUrl(q)])
       root.close()
       break
     }

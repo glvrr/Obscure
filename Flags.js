@@ -5,6 +5,7 @@ const MODES = {
   f: "files",
   d: "dirs",
   g: "web",
+  p: "pinterest",
   a: "apps",
   o: "menu",
   r: "run"
