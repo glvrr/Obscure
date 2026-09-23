@@ -42,6 +42,9 @@ property var apps: ([])
     "while read -r f; do\n" +
     "  id=\"$(basename \"$f\" .desktop)\"\n" +
     "  awk -F= -v file=\"$f\" -v id=\"$id\" '\n" +
+    "    /^\\[Desktop Entry\\]$/ { sec=1; next }\n" +
+    "    /^\\[/ { sec=0; next }\n" +
+    "    sec != 1 { next }\n" +
     "    /^Type=/ { type=$2 }\n" +
     "    /^NoDisplay=/ { nod=$2 }\n" +
     "    /^Hidden=/ { hid=$2 }\n" +
