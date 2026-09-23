@@ -699,7 +699,7 @@ Item {
             anchors.centerIn: parent
             width: Style.space(36)
             height: Style.space(36)
-            source: model.iconUrl !== "" ? model.iconUrl : ""
+            source: model.iconUrl || ""
             asynchronous: true
             sourceSize.width: width * Screen.devicePixelRatio
             sourceSize.height: height * Screen.devicePixelRatio
@@ -710,7 +710,7 @@ Item {
         Text {
           anchors.horizontalCenter: parent.horizontalCenter
           width: parent.width
-          text: model.label
+          text: model.label || ""
           font.family: Style.font.family
           font.pixelSize: Style.font.caption
           color: gridCell.isSelected ? root.selColor : root.fgColor
