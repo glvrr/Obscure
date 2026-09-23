@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "id": "glvr.ninja.spotlight",
+  "name": "QS Spotlight",
+  "version": "0.1.0",
+  "author": "glvr",
+  "description": "Spotlight-style launcher for Omarchy: apps, files, directories, and smart search.",
+  "kinds": [
+    "menu"
+  ],
+  "entryPoints": {
+    "menu": "Spotlight.qml"
+  },
+  "keepLoaded": true
+}
