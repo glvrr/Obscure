@@ -42,6 +42,11 @@ Item {
   // of a single physical click can land on a different row and activate it a
   // second time. Open() clears the latch for the next summon.
   property bool _opening: false
+  // Two-level keyboard model for the app grid: with an empty query, landing on
+  // the APPS tab only highlights the mode; Down enters the grid (first cell
+  // selected) and Up on the first row returns to mode cycling. Left/Right move
+  // cells only while engaged, otherwise they keep cycling APPS/FILES.
+  property bool gridEngaged: false
 
   // ---- parsed query + mode resolution ----
   readonly property var parsed: Flags.parseQuery(root.query)
@@ -198,6 +203,7 @@ Item {
   // ---- autocomplete ----
   readonly property int safeGridIndex: root.gridItems.length === 0 ? 0 : Math.max(0, Math.min(root.gridIndex, root.gridItems.length - 1))
   readonly property int safeListIndex: root.rowsCount === 0 ? 0 : Math.max(0, Math.min(root.selectedIndex, root.rowsCount - 1))
+  readonly property int gridCursor: root.gridEngaged ? root.safeGridIndex : -1
 
   readonly property string suggestionText: {
     if (!root.stripped) return ""
@@ -280,6 +286,7 @@ Item {
     root.debugLog("refresh search=" + root.searchMode + " apps=" + root.inApps + " files=" + root.inFiles
       + " stripped=\"" + root.stripped + "\" allApps=" + root.allApps.length
       + " gridItems=" + root.gridItems.length + " rows=" + root.rowsCount + " fileRows=" + root.fileRows.length)
+    root.gridEngaged = false
     root.selectedIndex = 0
     root.disarmPointer()
     root.syncViews()
@@ -351,16 +358,19 @@ Item {
     var order = ["", "apps", "files"]
     var i = order.indexOf(root.activeTab)
     if (i < 0) i = 0
+    root.gridEngaged = false
     root.activeTab = order[(i + dir + order.length) % order.length]
     queryField.forceActiveFocus()
   }
 
   function setTab(mode) {
+    root.gridEngaged = false
     root.activeTab = mode
     queryField.forceActiveFocus()
   }
 
   function toggleTab(mode) {
+    root.gridEngaged = false
     root.activeTab = root.activeTab === mode ? "" : mode
     queryField.forceActiveFocus()
   }
@@ -382,14 +392,16 @@ Item {
           root.runMode("files", "")
           return
         }
-        // Auto mode: the grid is the primary content. Clicking (or Enter on)
-        // the highlighted cell must launch, not just close the card.
-        var g0 = root.gridItems[root.safeGridIndex]
-        if (g0) {
-          root._opening = true
-          root.launchApp(g0)
-          root.close()
-          return
+        // The grid launches only once it has been entered (Down or a click);
+        // an Enter with the query line still on the mode level just closes.
+        if (root.inApps && root.gridEngaged) {
+          var g0 = root.gridItems[root.safeGridIndex]
+          if (g0) {
+            root._opening = true
+            root.launchApp(g0)
+            root.close()
+            return
+          }
         }
         root.close()
         return
@@ -567,7 +579,10 @@ Item {
   }
 
   function selectGridFromPointer(item, index, mouse) {
-    if (pointerGate.moved(item, mouse)) root.gridIndex = index
+    if (pointerGate.moved(item, mouse)) {
+      root.gridEngaged = true
+      root.gridIndex = index
+    }
   }
 
   PanelWindow {
@@ -694,7 +709,7 @@ Item {
             Layout.fillWidth: true
             Layout.alignment: Qt.AlignVCenter
             tabMode: root.activeTab
-            gridActive: root.gridMode
+            gridActive: root.gridMode && root.gridEngaged
             text: root.query
             suggestion: root.suggestionText
             onTextChanged: root.query = queryField.text
@@ -783,9 +798,28 @@ Item {
     root.disarmPointer()
     if (event.key === Qt.Key_Down || event.key === Qt.Key_Up) {
       var cols = root.gridCols
-      var next = (event.key === Qt.Key_Down ? root.safeGridIndex + cols : root.safeGridIndex - cols)
-      root.gridIndex = Math.max(0, Math.min(next, root.gridItems.length - 1))
-      appGrid.positionViewAtIndex(root.gridIndex, GridView.Contain)
+      if (event.key === Qt.Key_Down) {
+        if (!root.gridEngaged) {
+          // First Down leaves the mode level and selects the first cell.
+          root.gridEngaged = true
+          root.gridIndex = 0
+          appGrid.positionViewAtIndex(0, GridView.Contain)
+          return
+        }
+        var next = root.safeGridIndex + cols
+        root.gridIndex = Math.max(0, Math.min(next, root.gridItems.length - 1))
+        appGrid.positionViewAtIndex(root.gridIndex, GridView.Contain)
+      } else {
+        if (!root.gridEngaged) return
+        if (root.safeGridIndex < cols) {
+          // Up on the first row returns to the mode level.
+          root.gridEngaged = false
+          root.gridIndex = 0
+          return
+        }
+        root.gridIndex = Math.max(0, root.safeGridIndex - cols)
+        appGrid.positionViewAtIndex(root.gridIndex, GridView.Contain)
+      }
     } else if (event.key === Qt.Key_Left || event.key === Qt.Key_Right) {
       root.gridStep(event.key === Qt.Key_Right ? 1 : -1)
     } else if (event.key === Qt.Key_Tab) {
@@ -797,6 +831,7 @@ Item {
 
   function gridStep(dir) {
     root.disarmPointer()
+    if (!root.gridEngaged) return
     if (root.gridItems.length === 0) return
     var next = root.safeGridIndex + dir
     if (next === root.gridIndex) return
@@ -826,7 +861,7 @@ Item {
       required property string kind
       required property string label
       required property string iconUrl
-      property bool isSelected: index === root.safeGridIndex
+      property bool isSelected: index === root.gridCursor
 
       width: appGrid.cellWidth
       height: appGrid.cellHeight
@@ -878,6 +913,7 @@ Item {
         hoverEnabled: true
         onPositionChanged: function(mouse) { root.selectGridFromPointer(gridCell, index, mouse) }
         onClicked: {
+          root.gridEngaged = true
           root.gridIndex = index
           root.activate()
         }
