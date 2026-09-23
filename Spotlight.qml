@@ -76,7 +76,16 @@ Item {
   }
 
   // ---- data ----
+  // Host facade for app entries. Some host builds never hand a scoped
+  // appLibrary to third-party menu plugins (null here), so the grid falls back
+  // to the self-contained AppIndex (.desktop scanner).
   readonly property var appLibrary: root.shell ? root.shell.appLibrary : null
+  property bool appIndexReady: false
+  property bool appIndexEmpty: false
+
+  function debugLog(msg) {
+    if (Quickshell.env("OMARCHY_SPOTLIGHT_DEBUG") === "1") console.log("[spotlight] " + msg)
+  }
 
   property var allApps: ([])                 // preloaded for the grid
   property var fileRows: ([])                // fd-backed list
@@ -107,11 +116,46 @@ Item {
     return out
   }
 
+  function buildGridApps(list) {
+    var out = []
+    for (var i = 0; i < list.length; i++) {
+      var it = list[i]
+      var appId = String(it.appId || (it.entry && it.entry.id) || "")
+      if (!appId) continue
+      var label = String(it.label || (root.appLibrary && it.entry && root.appLibrary.entryName(it.entry)) || appId)
+      var icon = String(it.icon || (it.entry && it.entry.icon) || "")
+      out.push({
+        kind: "app",
+        appId: appId,
+        label: label,
+        subtext: "",
+        iconUrl: it.iconUrl || appIndex.iconFor(icon)
+      })
+    }
+    return out
+  }
+
   function ensureApps() {
-    if (!root.appLibrary) return
+    root.debugLog("ensureApps shell=" + (root.shell !== null) + " appLibrary=" + (root.appLibrary !== null) + " allApps=" + root.allApps.length + " appIndexReady=" + root.appIndexReady + " busy=" + appIndex.busy)
     if (root.allApps.length > 0) return
-    root.allApps = root.loadApps("", root.gridCap * 4)
-    if (root.allApps.length === 0) appRetry.restart()
+    if (root.appLibrary) {
+      root.appIndexReady = true
+      try {
+        root.allApps = root.buildGridApps(root.appLibrary.sortedEntries(""))
+        if (root.allApps.length > 0) return
+      } catch (e) {
+        appIndexReady = false
+      }
+    }
+    if (!root.appIndexReady) {
+      if (!appIndex.busy) appIndex.load()
+      return
+    }
+    root.allApps = root.buildGridApps(appIndex.apps)
+    if (root.allApps.length === 0) {
+      root.appIndexEmpty = true
+      appRetry.restart()
+    }
   }
 
   // ---- list rows ----
@@ -195,6 +239,7 @@ Item {
 
   // ---- search ----
   function refreshResults() {
+    root.debugLog("refresh gridMode=" + root.gridMode + " listMode=" + root.listMode + " stripped=\"" + root.stripped + "\" allApps=" + root.allApps.length + " gridItems=" + root.gridItems.length + " fileRows=" + root.fileRows.length)
     root.selectedIndex = 0
     if (root.gridMode) root.ensureApps()
     if (root.hasFlag && (root.parsedMode === "files" || root.parsedMode === "dirs")) {
@@ -277,6 +322,7 @@ Item {
         var g = root.gridItems[root.safeGridIndex]
         if (g) {
           if (root.appLibrary) root.appLibrary.launch(g.appId, g.label)
+          else appIndex.launch(g.appId)
           root.close()
         } else {
           root.runMode("web", root.stripped)
@@ -299,6 +345,7 @@ Item {
         var g = root.gridItems[root.safeGridIndex]
         if (!g) return
         if (root.appLibrary) root.appLibrary.launch(g.appId, g.label)
+        else appIndex.launch(g.appId)
         root.close()
         break
       }
@@ -365,6 +412,7 @@ Item {
   FileSearch {
     id: fileSearch
     onDone: {
+      root.debugLog("fileSearch done rows=" + fileSearch.results.length + " kind=" + root.fileKind)
       var rows = []
       var paths = fileSearch.results
       var isDir = root.fileKind === "dir"
@@ -373,6 +421,21 @@ Item {
       }
       root.fileRows = rows
       root.selectedIndex = 0
+    }
+  }
+
+  // Self-contained desktop-entry index, used when the host leaves the
+  // appLibrary facade null (third-party menu plugins).
+  AppIndex {
+    id: appIndex
+    onLoaded: {
+      root.debugLog("appIndex loaded apps=" + appIndex.apps.length)
+      root.appIndexReady = true
+      if (root.allApps.length === 0) root.allApps = root.buildGridApps(appIndex.apps)
+      root.debugLog("appIndex built allApps=" + root.allApps.length)
+      if (root.allApps.length === 0) return
+      appRetry.stop()
+      if (root.opened) root.refreshResults()
     }
   }
 
