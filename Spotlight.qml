@@ -12,12 +12,15 @@ import "Search.js" as Search
 // omarchyPath / shell / manifest plus open(payloadJson) / close() / ping().
 //
 // Interaction model (UI_SCHEME.md):
-//  - APPS tab shows a grid of app icons; the query line sits on top and acts
-//    as a live filter for the grid.
-//  - As soon as the user types, the header icons/tabs fade away.
-//  - While typing, matching content appears (grid filters / result list) and
-//    the query line offers an inline autocomplete (Tab completes).
-//  - Everything is animated but must stay snappy.
+//  - activeTab is a mode: "" (auto), "apps", "files". By default no tab is
+//    active; what you type decides the mode automatically (apps/files/Google).
+//  - Auto mode renders the APPS icon grid; it becomes a live filter while
+//    typing. Picking FILES switches to an fd-backed list.
+//  - The header icons/tabs fade away as soon as the user types.
+//  - Empty query: Left/Right arrows cycle the mode; typing: Up/Down navigate
+//    the grid or list, Tab completes the inline autocomplete, Enter activates.
+//  - Enter in auto mode launches the selected app; with no matches anywhere
+//    (or flag -g) it falls back to a Google search.
 Item {
   id: root
 
@@ -26,10 +29,11 @@ Item {
   property var manifest: null
 
   property string query: ""
-  property string tabMode: "apps" // "apps" | "files"
+  property string activeTab: "" // "" (auto) | "apps" | "files"
   property bool opened: false
-  property int selectedIndex: 0  // list rows (FILES / flags)
-  property int gridIndex: 0      // APPS grid cell
+  property int selectedIndex: 0 // list rows (FILES / flags)
+  property int gridIndex: 0     // APPS grid cell
+  property bool _activating: false
 
   // ---- parsed query + mode resolution ----
   readonly property var parsed: Flags.parseQuery(root.query)
@@ -38,12 +42,13 @@ Item {
   readonly property string parsedMode: root.parsed.mode
 
   readonly property bool hasFlag: root.flag !== ""
+  readonly property bool fileMode: root.activeTab === "files"
 
   // Header icon/tabs only stay while the query line is empty.
   readonly property bool showTabs: root.query === ""
 
-  // APPS is backed by an icon grid; FILES and flags by a list.
-  readonly property bool gridMode: !root.hasFlag && root.tabMode === "apps"
+  // Auto mode (and the APPS tab) render the icon grid; FILES renders a list.
+  readonly property bool gridMode: !root.hasFlag && root.activeTab !== "files"
 
   // Which provider backs the visible list. A typed flag wins over the tab;
   // -f / -d both land in "files".
@@ -52,7 +57,7 @@ Item {
       if (root.parsedMode === "files" || root.parsedMode === "dirs") return "files"
       return ""
     }
-    return root.tabMode === "files" ? "files" : ""
+    return root.fileMode ? "files" : ""
   }
 
   readonly property string hintText: {
@@ -73,8 +78,8 @@ Item {
   // ---- data ----
   readonly property var appLibrary: root.shell ? root.shell.appLibrary : null
 
-  property var allApps: ([])                      // preloaded for the grid
-  property var fileRows: ([])                     // fd-backed list
+  property var allApps: ([])                 // preloaded for the grid
+  property var fileRows: ([])                // fd-backed list
   property string fileKind: "file"
   readonly property var fileList: root.listMode === "files" ? root.fileRows : ([])
 
@@ -103,9 +108,10 @@ Item {
   }
 
   function ensureApps() {
-    if (root.allApps.length === 0 && root.appLibrary) {
-      root.allApps = root.loadApps("", root.gridCap * 4)
-    }
+    if (!root.appLibrary) return
+    if (root.allApps.length > 0) return
+    root.allApps = root.loadApps("", root.gridCap * 4)
+    if (root.allApps.length === 0) appRetry.restart()
   }
 
   // ---- list rows ----
@@ -161,7 +167,7 @@ Item {
     var payload = ({})
     try { payload = JSON.parse(payloadJson || "{}") } catch (e) { payload = ({}) }
     root.query = String(payload.query || "")
-    root.tabMode = payload.tab === "files" ? "files" : "apps"
+    root.activeTab = payload.tab === "files" ? "files" : payload.tab === "apps" ? "apps" : ""
     root.selectedIndex = 0
     root.gridIndex = 0
     root.ensureApps()
@@ -234,28 +240,54 @@ Item {
     if (root.suggestionText !== "") root.query = root.suggestionText
   }
 
+  // ---- mode switching ----
+  function cycleMode(dir) {
+    var order = ["", "apps", "files"]
+    var i = order.indexOf(root.activeTab)
+    if (i < 0) i = 0
+    root.activeTab = order[(i + dir + order.length) % order.length]
+    queryField.forceActiveFocus()
+  }
+
+  function setTab(mode) {
+    root.activeTab = mode
+    queryField.forceActiveFocus()
+  }
+
   // ---- activation ----
+  // Enter routes automatically: apps/files open their selection, and any
+  // mode with no matches (or flag -g) falls back to a Google search.
   function activate() {
-    if (root.hasFlag) {
-      root.runMode(root.parsedMode, root.stripped)
-      return
-    }
-    if (!root.stripped) {
-      root.close()
-      return
-    }
-    if (root.gridMode) {
-      var g = root.gridItems[root.safeGridIndex]
-      if (g) {
-        if (root.appLibrary) root.appLibrary.launch(g.appId, g.label)
-        root.close()
-      } else {
-        root.runMode("web", root.stripped)
+    if (root._activating) return
+    root._activating = true
+    try {
+      if (root.hasFlag) {
+        root.runMode(root.parsedMode, root.stripped)
+        return
       }
-      return
+      if (!root.stripped) {
+        if (root.listMode === "files" && root.rowsCount > 0) {
+          root.runMode("files", "")
+        } else {
+          root.close()
+        }
+        return
+      }
+      if (root.gridMode) {
+        var g = root.gridItems[root.safeGridIndex]
+        if (g) {
+          if (root.appLibrary) root.appLibrary.launch(g.appId, g.label)
+          root.close()
+        } else {
+          root.runMode("web", root.stripped)
+        }
+        return
+      }
+      var mode = Search.decide(root.activeTab, 0, root.fileRows.length)
+      root.runMode(mode, root.stripped)
+    } finally {
+      root._activating = false
     }
-    var mode = Search.decide(root.tabMode, 0, root.fileRows.length)
-    root.runMode(mode, root.stripped)
   }
 
   function runMode(mode, q) {
@@ -302,14 +334,26 @@ Item {
     root.close()
   }
 
-  function setTab(mode) {
-    root.tabMode = mode
-    queryField.forceActiveFocus()
-  }
-
   onOpenedChanged: if (root.opened) root.refreshResults()
   onQueryChanged: if (root.opened) root.refreshResults()
-  onTabModeChanged: if (root.opened) root.refreshResults()
+  onActiveTabChanged: if (root.opened) root.refreshResults()
+  onShellChanged: if (root.shell) Qt.callLater(root.ensureApps)
+  Component.onCompleted: Qt.callLater(root.ensureApps)
+
+  Timer {
+    id: appRetry
+    interval: 300
+    onTriggered: {
+      if (root.allApps.length > 0) { appRetry.stop(); return }
+      root.ensureApps()
+      if (root.allApps.length === 0) {
+        appRetry.start()
+      } else {
+        appRetry.stop()
+        if (root.gridMode) root.refreshResults()
+      }
+    }
+  }
 
   Timer {
     id: searchTimer
@@ -379,36 +423,49 @@ Item {
           if (event.key === Qt.Key_Escape) {
             root.close()
             event.accepted = true
+          } else if (root.hasFlag) {
+            if (event.key === Qt.Key_Down || event.key === Qt.Key_Up) {
+              var fdelta = event.key === Qt.Key_Down ? 1 : -1
+              var fn = root.rowsCount
+              if (fn > 0) {
+                root.selectedIndex = (root.safeListIndex + fdelta + fn) % fn
+                event.accepted = true
+              }
+            } else if (event.key === Qt.Key_Tab) {
+              root.completeSuggestion()
+              event.accepted = true
+            }
+          } else if (event.key === Qt.Key_Left || event.key === Qt.Key_Right) {
+            root.cycleMode(event.key === Qt.Key_Right ? 1 : -1)
+            event.accepted = true
           } else if (root.gridMode) {
             if (event.key === Qt.Key_Down || event.key === Qt.Key_Up) {
               var cols = root.gridCols
               var next = (event.key === Qt.Key_Down ? root.safeGridIndex + cols : root.safeGridIndex - cols)
               root.gridIndex = Math.max(0, Math.min(next, root.gridItems.length - 1))
               event.accepted = true
-            } else if ((event.key === Qt.Key_Left || event.key === Qt.Key_Right) && !queryField.activeFocus) {
-              var step = event.key === Qt.Key_Right ? 1 : -1
-              root.gridIndex = Math.max(0, Math.min(root.safeGridIndex + step, root.gridItems.length - 1))
-              event.accepted = true
-            } else if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter) {
-              root.activate()
-              event.accepted = true
             } else if (event.key === Qt.Key_Tab) {
               root.completeSuggestion()
               event.accepted = true
-            }
-          } else if (event.key === Qt.Key_Down || event.key === Qt.Key_Up) {
-            var delta = event.key === Qt.Key_Down ? 1 : -1
-            var n = root.rowsCount
-            if (n > 0) {
-              root.selectedIndex = (root.safeListIndex + delta + n) % n
+            } else if ((event.key === Qt.Key_Return || event.key === Qt.Key_Enter) && !queryField.activeFocus) {
+              root.activate()
               event.accepted = true
             }
-          } else if (event.key === Qt.Key_Tab) {
-            root.completeSuggestion()
-            event.accepted = true
-          } else if ((event.key === Qt.Key_Return || event.key === Qt.Key_Enter) && !queryField.activeFocus) {
-            root.activate()
-            event.accepted = true
+          } else {
+            if (event.key === Qt.Key_Down || event.key === Qt.Key_Up) {
+              var delta = event.key === Qt.Key_Down ? 1 : -1
+              var n = root.rowsCount
+              if (n > 0) {
+                root.selectedIndex = (root.safeListIndex + delta + n) % n
+                event.accepted = true
+              }
+            } else if (event.key === Qt.Key_Tab) {
+              root.completeSuggestion()
+              event.accepted = true
+            } else if ((event.key === Qt.Key_Return || event.key === Qt.Key_Enter) && !queryField.activeFocus) {
+              root.activate()
+              event.accepted = true
+            }
           }
         }
 
@@ -443,16 +500,18 @@ Item {
               }
 
               SpotlightTab {
-                Layout.alignment: Qt.AlignVCenter
+                id: appsTab
                 text: "APPS"
-                active: !root.hasFlag && root.tabMode === "apps"
+                icon: "\uf00a"
+                active: !root.hasFlag && root.activeTab === "apps"
                 onClicked: root.setTab("apps")
               }
 
               SpotlightTab {
-                Layout.alignment: Qt.AlignVCenter
+                id: filesTab
                 text: "FILES"
-                active: !root.hasFlag && root.tabMode === "files"
+                icon: "\uf07b"
+                active: !root.hasFlag && root.activeTab === "files"
                 onClicked: root.setTab("files")
               }
             }
@@ -462,7 +521,7 @@ Item {
             id: queryField
             Layout.fillWidth: true
             Layout.alignment: Qt.AlignVCenter
-            tabMode: root.tabMode
+            tabMode: root.activeTab
             text: root.query
             suggestion: root.suggestionText
             onTextChanged: root.query = queryField.text

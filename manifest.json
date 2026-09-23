@@ -6,10 +6,18 @@
   "author": "glvr",
   "description": "Spotlight-style launcher for Omarchy: apps, files, directories, and smart search.",
   "kinds": [
-    "menu"
+    "menu",
+    "bar-widget"
   ],
   "entryPoints": {
-    "menu": "Spotlight.qml"
+    "menu": "Spotlight.qml",
+    "barWidget": "SpotlightBar.qml"
+  },
+  "barWidget": {
+    "displayName": "Spotlight",
+    "description": "Toggle the spotlight launcher",
+    "category": "System",
+    "allowMultiple": false
   },
   "keepLoaded": true
 }
