@@ -590,7 +590,10 @@ Item {
       anchors.horizontalCenter: parent.horizontalCenter
       y: Math.max(Style.gapsOut, Math.round((window.height - card.height) / 2))
       color: root.cardColor
-      borderSpec: root.borderSpec
+      // No enclosing outline: every control (O / APPS / FILES / query line)
+      // carries its own border, so the panel reads as separate outlined
+      // islands on the plain surface, not one bordered window.
+      borderSpec: Border.none()
 
       // Clicking empty card space returns focus to the query line.
       MouseArea {
