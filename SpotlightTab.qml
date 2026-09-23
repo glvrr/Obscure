@@ -22,7 +22,7 @@ Item {
   Rectangle {
     id: pill
     anchors.fill: parent
-    radius: Math.max(2, height / 2)
+    radius: Math.max(2, Style.cornerRadius)
     color: root.active ? Color.menu.selectedBackground : (root.hot ? Style.hoverFill : Style.normalFill)
     border.width: Math.max(1, Style.space(1))
     border.color: root.active ? Color.menu.border : (root.hot ? Style.hoverBorderColor : Style.normalBorderColor)
