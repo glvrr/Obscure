@@ -24,7 +24,7 @@ if [ -n "$entry" ] && grep -q '^[[:space:]]*Terminal[[:space:]]*=[[:space:]]*tru
   # Replace the first %f/%F/%u/%U code with the shell-quoted path, strip
   # the informational %i/%c/%k codes, then hand the command to the terminal.
   quoted=$(printf '%q' "$path")
-  cmd=$(printf '%s' "$exec_line" | sed "s/%[fuFU]/PLACEHOLDER_QUOTED_PATH/; s/%[ick]/X/g" | sed "s/PLACEHOLDER_QUOTED_PATH/$quoted/")
+  cmd=$(printf '%s' "$exec_line" | sed 's/%[fuFU]/__QP__/; s/%[ick]/X/g' | sed "s|__QP__|$quoted|")
   cd "$(dirname "$path")" 2>/dev/null || true
   exec xdg-terminal-exec -- sh -c "$cmd; exec \${SHELL:-bash}; exit 0" "open-file"
 else
