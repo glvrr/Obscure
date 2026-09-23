@@ -318,9 +318,10 @@ Item {
   }
 
   function launchApp(g) {
-    root.debugLog("launch " + g.appId)
+    root.plainLog("launchApp appId=" + JSON.stringify(String(g.appId)) + " appLibrary=" + (root.appLibrary !== null))
     if (root.appLibrary) root.appLibrary.launch(g.appId, g.label)
     else appIndex.launch(g.appId)
+    root.plainLog("launchApp exec dispatched")
   }
 
   // ---- mode switching ----
@@ -338,9 +339,15 @@ Item {
   }
 
   // ---- activation ----
+  // Always-on diagnostic line (temporary). Remove after launch bug is fixed.
+  function plainLog(msg) { Console.log("SPL: " + msg) }
+
   // Enter routes automatically: the selected app/file opens, and any mode
   // with no matches (or flag -g) falls back to a Google search.
   function activate() {
+    root.plainLog("activate called flag=" + JSON.stringify(root.flag) + " mode=" + root.parsedMode
+      + " stripped=" + JSON.stringify(root.stripped) + " selIdx=" + root.safeListIndex
+      + " gridIdx=" + root.safeGridIndex + " rows=" + root.rowsCount + " grid=" + root.gridItems.length)
     if (root._activating) return
     root._activating = true
     try {
@@ -371,6 +378,7 @@ Item {
         if (r.kind === "app") {
           root.launchApp(r)
         } else {
+          root.plainLog("xdg-open argv=" + JSON.stringify(["xdg-open", r.path]))
           Quickshell.execDetached(["xdg-open", r.path])
         }
         root.close()
@@ -383,6 +391,7 @@ Item {
   }
 
   function runMode(mode, q) {
+    root.plainLog("runMode mode=" + mode + " q=" + JSON.stringify(q))
     switch (mode) {
     case "apps": {
       var g = root.gridItems[root.safeGridIndex]
@@ -395,6 +404,7 @@ Item {
     case "dirs": {
       var f = root.fileRows[root.safeListIndex]
       if (!f) return
+      root.plainLog("xdg-open argv=" + JSON.stringify(["xdg-open", f.path]))
       Quickshell.execDetached(["xdg-open", f.path])
       root.close()
       break
