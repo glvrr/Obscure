@@ -87,7 +87,6 @@ Item {
 
   function gridItemsFor(q) {
     if (!root.gridMode) return []
-    if (root.allApps.length === 0) root.allApps = root.loadApps("", root.gridCap * 4)
     if (!q) return root.allApps.slice(0, root.gridCap)
     var ql = String(q).toLowerCase().split(/\s+/).filter(function(w) { return w !== "" })
     var out = []
@@ -101,6 +100,12 @@ Item {
       if (hit) out.push(a)
     }
     return out
+  }
+
+  function ensureApps() {
+    if (root.allApps.length === 0 && root.appLibrary) {
+      root.allApps = root.loadApps("", root.gridCap * 4)
+    }
   }
 
   // ---- list rows ----
@@ -159,7 +164,7 @@ Item {
     root.tabMode = payload.tab === "files" ? "files" : "apps"
     root.selectedIndex = 0
     root.gridIndex = 0
-    if (!root.hasFlag) root.allApps = root.loadApps("", root.gridCap * 4)
+    root.ensureApps()
     root.opened = true
     root.refreshResults()
     Qt.callLater(function() {
@@ -184,6 +189,8 @@ Item {
 
   // ---- search ----
   function refreshResults() {
+    root.selectedIndex = 0
+    if (root.gridMode) root.ensureApps()
     if (root.hasFlag && (root.parsedMode === "files" || root.parsedMode === "dirs")) {
       root.gridIndex = 0
       searchTimer.restart()
@@ -193,7 +200,6 @@ Item {
     } else {
       fileSearch.cancel()
       root.fileRows = []
-      root.selectedIndex = 0
       if (root.gridItems.length === 0) root.gridIndex = 0
     }
   }

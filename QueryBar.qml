@@ -70,7 +70,7 @@ TextField {
     visible: root.showSuggestion
     anchors.verticalCenter: parent.verticalCenter
     anchors.left: parent.left
-    anchors.leftMargin: root.leftPadding + Style.space(2) + tm.advanceWidth(root.text) + Style.space(1)
+    anchors.leftMargin: root.leftPadding + Style.space(2) + tm.width + Style.space(1)
     text: root.suggestionSuffix
     font: root.font
     color: Qt.darker(Color.menu.text, 1.4)
