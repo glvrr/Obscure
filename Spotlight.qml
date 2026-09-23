@@ -10,6 +10,14 @@ import "Search.js" as Search
 
 // Spotlight root. Host contract for a `menu` plugin: injected properties
 // omarchyPath / shell / manifest plus open(payloadJson) / close() / ping().
+//
+// Interaction model (UI_SCHEME.md):
+//  - APPS tab shows a grid of app icons; the query line sits on top and acts
+//    as a live filter for the grid.
+//  - As soon as the user types, the header icons/tabs fade away.
+//  - While typing, matching content appears (grid filters / result list) and
+//    the query line offers an inline autocomplete (Tab completes).
+//  - Everything is animated but must stay snappy.
 Item {
   id: root
 
@@ -20,7 +28,8 @@ Item {
   property string query: ""
   property string tabMode: "apps" // "apps" | "files"
   property bool opened: false
-  property int selectedIndex: 0
+  property int selectedIndex: 0  // list rows (FILES / flags)
+  property int gridIndex: 0      // APPS grid cell
 
   // ---- parsed query + mode resolution ----
   readonly property var parsed: Flags.parseQuery(root.query)
@@ -30,6 +39,12 @@ Item {
 
   readonly property bool hasFlag: root.flag !== ""
 
+  // Header icon/tabs only stay while the query line is empty.
+  readonly property bool showTabs: root.query === ""
+
+  // APPS is backed by an icon grid; FILES and flags by a list.
+  readonly property bool gridMode: !root.hasFlag && root.tabMode === "apps"
+
   // Which provider backs the visible list. A typed flag wins over the tab;
   // -f / -d both land in "files".
   readonly property string listMode: {
@@ -37,10 +52,15 @@ Item {
       if (root.parsedMode === "files" || root.parsedMode === "dirs") return "files"
       return ""
     }
-    return root.tabMode
+    return root.tabMode === "files" ? "files" : ""
   }
 
   readonly property string hintText: {
+    if (root.gridMode) {
+      if (root.stripped !== "" && root.gridItems.length === 0)
+        return "No app matches \u2014 Enter to search Google"
+      return ""
+    }
     if (!root.hasFlag) return ""
     switch (root.parsedMode) {
     case "web": return "Search Google for \u201C" + root.stripped + "\u201D"
@@ -53,12 +73,59 @@ Item {
   // ---- data ----
   readonly property var appLibrary: root.shell ? root.shell.appLibrary : null
 
-  property var appRows: ([])
-  property var fileRows: ([])
+  property var allApps: ([])                      // preloaded for the grid
+  property var fileRows: ([])                     // fd-backed list
   property string fileKind: "file"
+  readonly property var fileList: root.listMode === "files" ? root.fileRows : ([])
 
-  readonly property var displayRows: root.listMode === "apps" ? root.appRows : root.listMode === "files" ? root.fileRows : ([])
+  // ---- grid ----
+  readonly property int gridCols: 6
+  readonly property int maxGridRows: 3
+  readonly property int gridCap: root.gridCols * root.maxGridRows
+
+  readonly property var gridItems: root.gridItemsFor(root.stripped)
+
+  function gridItemsFor(q) {
+    if (!root.gridMode) return []
+    if (root.allApps.length === 0) root.allApps = root.loadApps("", root.gridCap * 4)
+    if (!q) return root.allApps.slice(0, root.gridCap)
+    var ql = String(q).toLowerCase().split(/\s+/).filter(function(w) { return w !== "" })
+    var out = []
+    for (var i = 0; i < root.allApps.length && out.length < root.gridCap; i++) {
+      var a = root.allApps[i]
+      var label = String(a.label).toLowerCase()
+      var hit = true
+      for (var w = 0; w < ql.length; w++) {
+        if (label.indexOf(ql[w]) < 0) { hit = false; break }
+      }
+      if (hit) out.push(a)
+    }
+    return out
+  }
+
+  // ---- list rows ----
+  readonly property var displayRows: root.fileList
   readonly property int rowsCount: root.displayRows.length
+
+  // ---- autocomplete ----
+  readonly property int safeGridIndex: root.gridItems.length === 0 ? 0 : Math.max(0, Math.min(root.gridIndex, root.gridItems.length - 1))
+  readonly property int safeListIndex: root.rowsCount === 0 ? 0 : Math.max(0, Math.min(root.selectedIndex, root.rowsCount - 1))
+
+  readonly property string suggestionText: {
+    if (!root.stripped) return ""
+    if (root.gridMode) {
+      var a = root.gridItems[root.safeGridIndex]
+      if (!a) return ""
+      if (a.label.toLowerCase().indexOf(root.stripped.toLowerCase()) === 0) return a.label
+      return ""
+    }
+    if (root.listMode === "files") {
+      var f = root.fileRows[root.safeListIndex]
+      if (!f) return ""
+      if (f.path.toLowerCase().indexOf(root.stripped.toLowerCase()) === 0) return f.path
+    }
+    return ""
+  }
 
   // ---- geometry / colors ----
   readonly property var borderSpec: Border.surfaceSpec("menu", "border", Color.menu.border, Math.max(1, Style.space(2)))
@@ -66,14 +133,23 @@ Item {
   readonly property color cardColor: Color.menu.background
   readonly property color fgColor: Color.menu.text
   readonly property color dimColor: Qt.darker(Color.menu.text, 1.45)
+  readonly property color selColor: Color.menu.selectedText
 
   property int headerHeight: Math.max(Style.space(46), Style.spacing.controlHeight + Style.spacing.md * 2)
   property int rowHeight: Style.space(46)
   property int maxVisible: 10
 
+  readonly property int cellHeight: Style.space(96)
+  readonly property int gridHeight: root.gridItems.length === 0 ? 0 : Math.ceil(Math.min(root.gridItems.length, root.gridCap) / root.gridCols) * root.cellHeight
+
   readonly property int visibleRows: Math.min(Math.max(0, root.rowsCount), root.maxVisible)
   readonly property bool showHint: root.hintText !== ""
-  readonly property int listHeight: root.showHint ? Style.space(44) : root.visibleRows > 0 ? root.visibleRows * root.rowHeight : 0
+  readonly property int listHeight: root.visibleRows > 0 ? root.visibleRows * root.rowHeight : 0
+  readonly property int contentHeight: {
+    if (root.showHint) return Style.space(44)
+    if (root.gridMode) return root.gridHeight
+    return root.listHeight
+  }
 
   // ---- host lifecycle ----
   function open(payloadJson) {
@@ -82,6 +158,8 @@ Item {
     root.query = String(payload.query || "")
     root.tabMode = payload.tab === "files" ? "files" : "apps"
     root.selectedIndex = 0
+    root.gridIndex = 0
+    if (!root.hasFlag) root.allApps = root.loadApps("", root.gridCap * 4)
     root.opened = true
     root.refreshResults()
     Qt.callLater(function() {
@@ -94,6 +172,7 @@ Item {
     fileSearch.cancel()
     root.opened = false
     root.selectedIndex = 0
+    root.gridIndex = 0
   }
 
   function ping() { return "ok" }
@@ -105,20 +184,26 @@ Item {
 
   // ---- search ----
   function refreshResults() {
-    root.selectedIndex = 0
-    if (root.listMode === "apps") {
-      fileSearch.cancel()
-      root.appRows = root.loadApps(root.stripped)
-    } else if (root.listMode === "files") {
+    if (root.hasFlag && (root.parsedMode === "files" || root.parsedMode === "dirs")) {
+      root.gridIndex = 0
       searchTimer.restart()
+    } else if (root.listMode === "files") {
+      root.gridIndex = 0
+      searchTimer.restart()
+    } else {
+      fileSearch.cancel()
+      root.fileRows = []
+      root.selectedIndex = 0
+      if (root.gridItems.length === 0) root.gridIndex = 0
     }
   }
 
-  function loadApps(q) {
+  function loadApps(q, cap) {
     if (!root.appLibrary) return []
     var rows = root.appLibrary.sortedEntries(q)
     var out = []
-    for (var i = 0; i < rows.length && out.length < 60; i++) {
+    var max = cap || 60
+    for (var i = 0; i < rows.length && out.length < max; i++) {
       var entry = rows[i].entry
       var appId = String(entry && entry.id || "")
       if (!appId) continue
@@ -139,6 +224,10 @@ Item {
     fileSearch.search(root.fileKind, root.stripped)
   }
 
+  function completeSuggestion() {
+    if (root.suggestionText !== "") root.query = root.suggestionText
+  }
+
   // ---- activation ----
   function activate() {
     if (root.hasFlag) {
@@ -149,22 +238,33 @@ Item {
       root.close()
       return
     }
-    var mode = Search.decide(root.tabMode, root.appRows.length, root.fileRows.length)
+    if (root.gridMode) {
+      var g = root.gridItems[root.safeGridIndex]
+      if (g) {
+        if (root.appLibrary) root.appLibrary.launch(g.appId, g.label)
+        root.close()
+      } else {
+        root.runMode("web", root.stripped)
+      }
+      return
+    }
+    var mode = Search.decide(root.tabMode, 0, root.fileRows.length)
     root.runMode(mode, root.stripped)
   }
 
   function runMode(mode, q) {
     switch (mode) {
-    case "apps": {
-      var a = root.appRows[root.selectedIndex]
-      if (!a) return
-      if (root.appLibrary) root.appLibrary.launch(a.appId, a.label)
-      root.close()
-      break
-    }
+    case "apps":
     case "files":
     case "dirs": {
-      var f = root.fileRows[root.selectedIndex]
+      if (root.gridMode) {
+        var g = root.gridItems[root.safeGridIndex]
+        if (!g) return
+        if (root.appLibrary) root.appLibrary.launch(g.appId, g.label)
+        root.close()
+        break
+      }
+      var f = root.fileRows[root.safeListIndex]
       if (!f) return
       Quickshell.execDetached(["xdg-open", f.path])
       root.close()
@@ -251,7 +351,7 @@ Item {
     BorderSurface {
       id: card
       width: Math.min(Style.space(620), window.width - Style.gapsOut * 2)
-      height: root.headerHeight + (root.listHeight > 0 ? root.listHeight + Style.spacing.sm : 0) + Style.spacing.md * 2
+      height: root.headerHeight + (root.contentHeight > 0 ? root.contentHeight + Style.spacing.sm : 0) + Style.spacing.md * 2
       radius: Style.cornerRadius
       anchors.horizontalCenter: parent.horizontalCenter
       y: Math.max(Style.gapsOut, Math.round((window.height - card.height) / 2))
@@ -273,13 +373,33 @@ Item {
           if (event.key === Qt.Key_Escape) {
             root.close()
             event.accepted = true
+          } else if (root.gridMode) {
+            if (event.key === Qt.Key_Down || event.key === Qt.Key_Up) {
+              var cols = root.gridCols
+              var next = (event.key === Qt.Key_Down ? root.safeGridIndex + cols : root.safeGridIndex - cols)
+              root.gridIndex = Math.max(0, Math.min(next, root.gridItems.length - 1))
+              event.accepted = true
+            } else if ((event.key === Qt.Key_Left || event.key === Qt.Key_Right) && !queryField.activeFocus) {
+              var step = event.key === Qt.Key_Right ? 1 : -1
+              root.gridIndex = Math.max(0, Math.min(root.safeGridIndex + step, root.gridItems.length - 1))
+              event.accepted = true
+            } else if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter) {
+              root.activate()
+              event.accepted = true
+            } else if (event.key === Qt.Key_Tab) {
+              root.completeSuggestion()
+              event.accepted = true
+            }
           } else if (event.key === Qt.Key_Down || event.key === Qt.Key_Up) {
             var delta = event.key === Qt.Key_Down ? 1 : -1
             var n = root.rowsCount
             if (n > 0) {
-              root.selectedIndex = (root.selectedIndex + delta + n) % n
+              root.selectedIndex = (root.safeListIndex + delta + n) % n
               event.accepted = true
             }
+          } else if (event.key === Qt.Key_Tab) {
+            root.completeSuggestion()
+            event.accepted = true
           } else if ((event.key === Qt.Key_Return || event.key === Qt.Key_Enter) && !queryField.activeFocus) {
             root.activate()
             event.accepted = true
@@ -295,23 +415,41 @@ Item {
           height: root.headerHeight - Style.space(8)
           spacing: Style.spacing.sm
 
-          OmarchyIcon {
+          // Icon + tabs collapse (with animation) once the user types.
+          Item {
+            id: tabCluster
+            Layout.preferredWidth: root.showTabs ? tabClusterRow.width : 0
+            Layout.preferredHeight: tabClusterRow.height
             Layout.alignment: Qt.AlignVCenter
-            onClicked: root.openOmarchy()
-          }
+            opacity: root.showTabs ? 1 : 0
+            enabled: root.showTabs
+            clip: true
+            Behavior on opacity { NumberAnimation { duration: 160; easing.type: Easing.OutQuad } }
+            Behavior on Layout.preferredWidth { NumberAnimation { duration: 200; easing.type: Easing.OutQuad } }
 
-          SpotlightTab {
-            Layout.alignment: Qt.AlignVCenter
-            text: "APPS"
-            active: !root.hasFlag && root.tabMode === "apps"
-            onClicked: root.setTab("apps")
-          }
+            RowLayout {
+              id: tabClusterRow
+              spacing: Style.spacing.sm
 
-          SpotlightTab {
-            Layout.alignment: Qt.AlignVCenter
-            text: "FILES"
-            active: !root.hasFlag && root.tabMode === "files"
-            onClicked: root.setTab("files")
+              OmarchyIcon {
+                Layout.alignment: Qt.AlignVCenter
+                onClicked: root.openOmarchy()
+              }
+
+              SpotlightTab {
+                Layout.alignment: Qt.AlignVCenter
+                text: "APPS"
+                active: !root.hasFlag && root.tabMode === "apps"
+                onClicked: root.setTab("apps")
+              }
+
+              SpotlightTab {
+                Layout.alignment: Qt.AlignVCenter
+                text: "FILES"
+                active: !root.hasFlag && root.tabMode === "files"
+                onClicked: root.setTab("files")
+              }
+            }
           }
 
           QueryBar {
@@ -320,24 +458,28 @@ Item {
             Layout.alignment: Qt.AlignVCenter
             tabMode: root.tabMode
             text: root.query
+            suggestion: root.suggestionText
             onTextChanged: root.query = queryField.text
             onActivate: root.activate()
+            onTabComplete: root.completeSuggestion()
           }
         }
 
-        // ---- results list ----
-        Column {
-          id: listColumn
+        // ---- content: app grid or result list ----
+        Item {
+          id: contentArea
           anchors.top: header.bottom
           anchors.topMargin: Style.spacing.sm
           anchors.left: parent.left
           anchors.right: parent.right
-          height: root.listHeight
-          visible: height > 0
+          height: root.contentHeight
+          visible: root.contentHeight > 0
 
           Text {
             visible: root.showHint
-            width: parent.width
+            anchors.top: parent.top
+            anchors.left: parent.left
+            anchors.right: parent.right
             height: Style.space(44)
             text: root.hintText
             font.family: Style.font.menuFamily
@@ -348,26 +490,125 @@ Item {
             elide: Text.ElideMiddle
           }
 
-          ListView {
-            visible: !root.showHint
-            width: parent.width
-            height: root.listHeight
+          GridView {
+            id: appGrid
+            visible: root.gridMode && !root.showHint
             clip: true
-            model: root.displayRows
-            delegate: rowComponent
+            interactive: false
+            width: parent.width
+            height: root.gridHeight
+            cellWidth: Math.floor(width / root.gridCols)
+            cellHeight: root.cellHeight
+            model: root.gridItems
+            delegate: gridDelegate
+
+            add: Transition {
+              NumberAnimation { properties: "opacity,scale"; from: 0; to: 1; duration: 150; easing.type: Easing.OutQuad }
+            }
+            remove: Transition {
+              NumberAnimation { property: "opacity"; to: 0; duration: 120 }
+            }
+            displaced: Transition {
+              NumberAnimation { properties: "x,y"; duration: 160; easing.type: Easing.OutQuad }
+            }
+            populate: Transition {
+              NumberAnimation { properties: "opacity,scale"; from: 0; to: 1; duration: 220; easing.type: Easing.OutQuad }
+            }
+          }
+
+          Column {
+            id: listColumn
+            visible: !root.gridMode && !root.showHint
+            anchors.top: parent.top
+            anchors.left: parent.left
+            anchors.right: parent.right
+            height: root.listHeight
+
+            ListView {
+              width: parent.width
+              height: root.listHeight
+              clip: true
+              model: root.displayRows
+              delegate: rowDelegate
+            }
           }
         }
       }
     }
   }
 
+  // ---- app grid cell ----
   Component {
-    id: rowComponent
+    id: gridDelegate
+
+    Item {
+      id: gridCell
+      readonly property bool isSelected: index === root.safeGridIndex
+
+      width: appGrid.cellWidth
+      height: appGrid.cellHeight
+
+      Column {
+        anchors.fill: parent
+        anchors.margins: Style.space(6)
+        spacing: Style.space(4)
+
+        Item {
+          width: parent.width
+          height: Style.space(52)
+
+          Rectangle {
+            anchors.centerIn: parent
+            width: Style.space(52)
+            height: Style.space(52)
+            radius: Math.max(2, (height - Style.space(4)) / 2)
+            color: gridCell.isSelected ? Color.menu.selectedBackground : "transparent"
+            Behavior on color { ColorAnimation { duration: 120 } }
+          }
+
+          Image {
+            anchors.centerIn: parent
+            width: Style.space(36)
+            height: Style.space(36)
+            source: model.iconUrl !== "" ? model.iconUrl : ""
+            asynchronous: true
+            sourceSize.width: width * Screen.devicePixelRatio
+            sourceSize.height: height * Screen.devicePixelRatio
+            fillMode: Image.PreserveAspectFit
+          }
+        }
+
+        Text {
+          anchors.horizontalCenter: parent.horizontalCenter
+          width: parent.width
+          text: model.label
+          font.family: Style.font.family
+          font.pixelSize: Style.font.caption
+          color: gridCell.isSelected ? root.selColor : root.fgColor
+          elide: Text.ElideMiddle
+          horizontalAlignment: Text.AlignHCenter
+        }
+      }
+
+      MouseArea {
+        anchors.fill: parent
+        hoverEnabled: true
+        onHoveredChanged: if (containsMouse) root.gridIndex = index
+        onClicked: {
+          root.gridIndex = index
+          root.activate()
+        }
+      }
+    }
+  }
+
+  // ---- result list row (files / flags) ----
+  Component {
+    id: rowDelegate
 
     Item {
       id: rowItem
-      readonly property bool isSelected: index === root.selectedIndex
-      readonly property bool isApp: model && model.kind === "app"
+      readonly property bool isSelected: index === root.safeListIndex
       readonly property bool isDir: model && model.kind === "dir"
       readonly property string iconGlyph: rowItem.isDir ? "\uf07b" : "\uf15b"
 
@@ -378,28 +619,15 @@ Item {
         anchors.fill: parent
         radius: Math.max(2, (height - Style.space(4)) / 2)
         color: rowItem.isSelected ? Color.menu.selectedBackground : "transparent"
-      }
-
-      Image {
-        visible: rowItem.isApp && model.iconUrl !== ""
-        anchors.verticalCenter: parent.verticalCenter
-        anchors.left: parent.left
-        anchors.leftMargin: Style.spacing.rowPaddingX
-        width: Style.space(24)
-        height: Style.space(24)
-        source: model.iconUrl
-        asynchronous: true
-        sourceSize.width: width * Screen.devicePixelRatio
-        sourceSize.height: height * Screen.devicePixelRatio
+        Behavior on color { ColorAnimation { duration: 120 } }
       }
 
       Text {
-        visible: !(rowItem.isApp && model.iconUrl !== "")
         anchors.verticalCenter: parent.verticalCenter
         anchors.left: parent.left
         anchors.leftMargin: Style.spacing.rowPaddingX
         width: Style.space(24)
-        text: rowItem.isApp ? "\uf013" : rowItem.iconGlyph
+        text: rowItem.iconGlyph
         font.family: Style.font.menuFamily
         font.pixelSize: Style.font.iconLarge
         color: rowItem.isSelected ? root.selColor : root.fgColor
@@ -413,24 +641,12 @@ Item {
         anchors.left: parent.left
         anchors.leftMargin: Style.space(24) + Style.spacing.rowPaddingX * 2
         anchors.right: parent.right
-        anchors.rightMargin: (rowItem.isApp && model.subtext !== "") ? Math.round(parent.width * 0.35) : Style.spacing.rowPaddingX
-        text: rowItem.isApp ? model.label : model.path
+        anchors.rightMargin: Style.spacing.rowPaddingX
+        text: model.path
         font.family: Style.font.family
         font.pixelSize: Style.font.body
         color: rowItem.isSelected ? root.selColor : root.fgColor
         elide: Text.ElideMiddle
-      }
-
-      Text {
-        visible: rowItem.isApp && model.subtext !== ""
-        anchors.verticalCenter: parent.verticalCenter
-        anchors.right: parent.right
-        anchors.rightMargin: Style.spacing.rowPaddingX
-        text: model.subtext
-        font.family: Style.font.family
-        font.pixelSize: Style.font.caption
-        color: rowItem.isSelected ? Color.menu.selectedText : root.dimColor
-        elide: Text.ElideLeft
       }
 
       MouseArea {
@@ -444,6 +660,4 @@ Item {
       }
     }
   }
-
-  readonly property color selColor: Color.menu.selectedText
 }
