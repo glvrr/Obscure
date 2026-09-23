@@ -2,8 +2,7 @@ import QtQuick
 import qs.Commons
 import qs.Ui
 
-// Icon-only pill button for the APPS / FILES tabs. The label text slides
-// out to the right when the tab is active (an explicit mode is selected).
+// Icon-only pill button for the APPS / FILES tabs (no sliding label).
 Item {
   id: root
 
@@ -15,9 +14,8 @@ Item {
   readonly property bool hot: mouseArea.containsMouse
   readonly property int iconSection: Style.spacing.controlHeight
 
-  width: root.iconSection + (root.active ? Style.space(8) + labelText.implicitWidth : 0)
+  width: root.iconSection
   height: root.iconSection
-  Behavior on width { NumberAnimation { duration: 180; easing.type: Easing.OutCubic } }
 
   Rectangle {
     id: pill
@@ -36,27 +34,6 @@ Item {
     font.family: Style.font.menuFamily
     font.pixelSize: Style.font.iconLarge
     color: root.active ? Color.accent : (root.hot ? Color.foreground : Color.menu.text)
-  }
-
-  // Sliding label: clipped and widened only while the tab is active.
-  Item {
-    id: labelBox
-    x: root.iconSection + Style.space(4)
-    width: root.active ? labelText.implicitWidth : 0
-    height: parent.height
-    clip: true
-    Behavior on width { NumberAnimation { duration: 180; easing.type: Easing.OutCubic } }
-
-    Text {
-      id: labelText
-      anchors.left: parent.left
-      anchors.verticalCenter: parent.verticalCenter
-      text: root.text
-      font.family: Style.font.family
-      font.pixelSize: Style.font.body
-      font.bold: root.active
-      color: root.active ? Color.accent : Color.foreground
-    }
   }
 
   MouseArea {
