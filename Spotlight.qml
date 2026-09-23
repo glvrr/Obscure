@@ -734,6 +734,7 @@ Item {
 
     Item {
       id: gridCell
+      required property int index
       required property string kind
       required property string label
       required property string iconUrl
@@ -802,6 +803,7 @@ Item {
 
     Item {
       id: rowItem
+      required property int index
       required property string kind
       required property string label
       required property string path
