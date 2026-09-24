@@ -6,6 +6,7 @@ const MODES = {
   d: "dirs",
   g: "web",
   p: "pinterest",
+  i: "images",
   a: "apps",
   o: "menu",
   r: "run"
@@ -82,6 +83,7 @@ const CHIP_NAMES = {
   dirs: "dirs",
   web: "google",
   pinterest: "pinterest",
+  images: "images",
   apps: "apps",
   menu: "omarchy",
   run: "run",

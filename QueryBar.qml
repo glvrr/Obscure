@@ -68,10 +68,11 @@ TextField {
       case "files": return "Search files..."
       case "apps": return "Search apps..."
       case "pinterest": return "Search Pinterest..."
+      case "images": return "Google Images..."
       }
     }
-    if (root.tabMode === "files") return "Search files...  (-f file  -d dir  -g web  -p pinterest  -r run  -. hidden)"
-    return "Search apps...  (-f file  -d dir  -g web  -p pinterest  -a apps  -o menu  -r run  -. hidden)"
+    if (root.tabMode === "files") return "Search files...  (-f file  -d dir  -g web  -p pinterest  -i images  -r run  -. hidden)"
+    return "Search apps...  (-f file  -d dir  -g web  -p pinterest  -i images  -a apps  -o menu  -r run  -. hidden)"
   }
 
   // ---- inline autocomplete ----
