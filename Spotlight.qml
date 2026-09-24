@@ -48,16 +48,20 @@ Item {
   // cells only while engaged, otherwise they keep cycling APPS/FILES.
   property bool gridEngaged: false
   // Header focus position when the query line is idle: "" (auto) | "apps" |
-  // "files" | "omarchy". Arrows cycle through it; only "omarchy" highlights
-  // the O island and Enter stays inert there (highlight-only).
+  // "files" | "omarchy". Arrows cycle through it; on "omarchy" the O island
+  // highlights and Enter opens the stock omarchy menu.
   property string headerPos: ""
+  // Settings view: opened via CTRL+K or a right-click on the bar icon
+  // (payload {"settings":true}). The content area then shows the settings
+  // panel; typing or Escape close it.
+  property bool settingsOpen: false
 
   // ---- parsed query + mode resolution ----
   readonly property var parsed: Flags.parseQuery(root.query)
   readonly property string flag: root.parsed.flag
   readonly property string stripped: root.parsed.query
   readonly property string parsedMode: root.parsed.mode
-  readonly property bool hidden: root.parsed.hidden
+  readonly property bool hidden: root.parsed.hidden || root.settings.showHidden
 
   readonly property bool hasFlag: root.flag !== ""
 
@@ -284,12 +288,18 @@ Item {
   readonly property int rowSpacing: Style.spacing.xs
   readonly property int listHeight: root.visibleRows > 0 ? root.visibleRows * root.rowHeight + (root.visibleRows - 1) * root.rowSpacing : 0
   readonly property int contentHeight: {
+    // Settings view replaces the search content entirely.
+    if (root.settingsOpen) return root.settingsPanelHeight
     // Auto mode with an empty query is just the line.
     if (!root.searchMode && !root.inApps && !root.inFiles) return 0
     if (root.showHint) return Style.space(44)
     if (root.gridMode) return root.gridHeight
     return root.listHeight
   }
+
+  // Fixed height of the settings panel: section header + 3 island toggles +
+  // separator + default-mode row + show-hidden toggle.
+  readonly property int settingsPanelHeight: Style.space(300)
 
   // ---- host lifecycle ----
   function open(payloadJson) {
@@ -298,7 +308,14 @@ Item {
     root._opening = false
     root.query = String(payload.query || "")
     root.headerPos = ""
-    root.activeTab = payload.tab === "files" ? "files" : payload.tab === "apps" ? "apps" : ""
+    var def = root.settings.ready ? root.settings.defaultMode : ""
+    var wanted = payload.tab === "files" ? "files" : payload.tab === "apps" ? "apps" : ""
+    if (wanted === "apps" && !root.settings.showApps) wanted = ""
+    if (wanted === "files" && !root.settings.showFiles) wanted = ""
+    if (def === "apps" && !root.settings.showApps) def = ""
+    if (def === "files" && !root.settings.showFiles) def = ""
+    root.activeTab = wanted === "" && (def === "apps" || def === "files") ? def : wanted
+    root.settingsOpen = !!payload.settings
     root.selectedIndex = 0
     root.gridIndex = 0
     root.disarmPointer()
@@ -405,9 +422,15 @@ Item {
 
   // ---- mode switching ----
   function cycleMode(dir) {
-    // Visual order of the header islands: O -> APPS -> FILES, then the idle
-    // query line ("auto"); the cycle wraps auto -> O. Default on open is auto.
-    var order = ["omarchy", "apps", "files", ""]
+    // Visual order of the enabled header islands: O -> APPS -> FILES, then
+    // the idle query line ("auto"); the cycle wraps. Islands turned off in
+    // the settings are skipped, and the query line can never be disabled.
+    var order = []
+    if (root.settings.showO) order.push("omarchy")
+    if (root.settings.showApps) order.push("apps")
+    if (root.settings.showFiles) order.push("files")
+    order.push("")
+    if (order.length === 1) return
     var i = order.indexOf(root.headerPos)
     if (i < 0) i = 0
     root.gridEngaged = false
@@ -431,10 +454,11 @@ Item {
   }
 
   // In-card hotkeys (UI_SCHEME.md [Hotkeys] / [Alternate controls]):
-  // CTRL+1 opens the standard omarchy menu, CTRL+2/CTRL+A force the APPS tab,
+  // CTRL+1 opens the standard omarchy menu, CTRL+2 forces the APPS tab,
   // CTRL+3/CTRL+F the FILES tab, CTRL+4/CTRL+G -g, CTRL+5/CTRL+P -p,
-  // CTRL+6/CTRL+I -i, CTRL+0/CTRL+R -r, CTRL+D -d. The flag ones prefill the
-  // query line so Enter hands the typed query to the requested search.
+  // CTRL+6/CTRL+I -i, CTRL+0/CTRL+R -r, CTRL+D -d, CTRL+K toggles the
+  // settings view. The flag ones prefill the query line so Enter hands the
+  // typed query to the requested search.
   function onHotkey(cmd) {
     if (cmd === "menu") {
       root.openOmarchy()
@@ -446,6 +470,16 @@ Item {
     }
     if (cmd === "files") {
       root.setTab("files")
+      return
+    }
+    if (cmd === "settings") {
+      // CTRL+K toggles the settings view; typing or Escape leave it.
+      if (!root.settingsOpen) {
+        root.settingsOpen = true
+        queryField.forceActiveFocus()
+      } else {
+        root.settingsOpen = false
+      }
       return
     }
     root.query = "-" + cmd + " "
@@ -625,7 +659,12 @@ Item {
   }
 
   onOpenedChanged: if (root.opened) root.refreshResults()
-  onQueryChanged: if (root.opened) root.refreshResults()
+  onQueryChanged: {
+    if (!root.opened) return
+    // Any typing leaves the settings view back to search.
+    if (root.settingsOpen && root.query !== "") root.settingsOpen = false
+    root.refreshResults()
+  }
   onActiveTabChanged: if (root.opened) root.refreshResults()
   onShellChanged: if (root.shell) Qt.callLater(root.ensureApps)
   Component.onCompleted: {
@@ -669,6 +708,25 @@ Item {
       root.fileRows = rows
       root.selectedIndex = 0
       root.syncResults()
+    }
+  }
+
+  SettingsStore {
+    id: settings
+
+    // A hidden island must not leave a mode selected with no way to leave it
+    // by click; fall back to the idle line (keyboard cycling already skips
+    // the disabled islands).
+    onShowAppsChanged: {
+      if (!settings.showApps && root.activeTab === "apps") root.activeTab = ""
+      if (root.opened) root.refreshResults()
+    }
+    onShowFilesChanged: {
+      if (!settings.showFiles && root.activeTab === "files") root.activeTab = ""
+      if (root.opened) root.refreshResults()
+    }
+    onShowOChanged: {
+      if (!settings.showO && root.headerPos === "omarchy") root.headerPos = ""
     }
   }
 
@@ -777,7 +835,8 @@ Item {
 
         Keys.onPressed: function(event) {
           if (event.key === Qt.Key_Escape) {
-            root.close()
+            if (root.settingsOpen) root.settingsOpen = false
+            else root.close()
             event.accepted = true
           } else if ((event.modifiers & Qt.ControlModifier) && Flags.ctrlCommand(event.key, true) !== "") {
             root.onHotkey(Flags.ctrlCommand(event.key, true))
@@ -832,6 +891,7 @@ Item {
 
               OmarchyIcon {
                 Layout.alignment: Qt.AlignVCenter
+                visible: root.settings.showO
                 active: root.headerPos === "omarchy"
                 onClicked: root.openOmarchy()
               }
@@ -840,6 +900,7 @@ Item {
                 id: appsTab
                 text: "APPS"
                 icon: "\uf00a"
+                visible: root.settings.showApps
                 active: !root.hasFlag && root.activeTab === "apps"
                 onClicked: root.toggleTab("apps")
               }
@@ -848,6 +909,7 @@ Item {
                 id: filesTab
                 text: "FILES"
                 icon: "\uf07b"
+                visible: root.settings.showFiles
                 active: !root.hasFlag && root.activeTab === "files"
                 onClicked: root.toggleTab("files")
               }
@@ -881,6 +943,10 @@ Item {
               onNavigateGrid: root.gridStep(dir)
               onHotkey: root.onHotkey(cmd)
               onRemoveFilter: root.removeFilter()
+              onEscape: {
+                if (root.settingsOpen) root.settingsOpen = false
+                else root.close()
+              }
             }
 
             Row {
@@ -944,8 +1010,71 @@ Item {
           height: root.contentHeight
           visible: root.contentHeight > 0
 
+          Column {
+            id: settingsView
+            visible: root.settingsOpen
+            anchors.top: parent.top
+            anchors.left: parent.left
+            anchors.right: parent.right
+            height: root.settingsPanelHeight
+            spacing: Style.spacing.sm
+
+            PanelSectionHeader {
+              width: parent.width
+              text: "UI elements"
+            }
+
+            Toggle {
+              width: parent.width
+              label: "Omarchy island"
+              description: "Show the O button that opens the Omarchy menu"
+              checked: settings.showO
+              onClicked: { settings.showO = !settings.showO; settings.save() }
+            }
+
+            Toggle {
+              width: parent.width
+              label: "Apps island"
+              description: "Show the APPS search button"
+              checked: settings.showApps
+              onClicked: { settings.showApps = !settings.showApps; settings.save() }
+            }
+
+            Toggle {
+              width: parent.width
+              label: "Files island"
+              description: "Show the FILES search button"
+              checked: settings.showFiles
+              onClicked: { settings.showFiles = !settings.showFiles; settings.save() }
+            }
+
+            PanelSeparator {
+              width: parent.width
+            }
+
+            Dropdown {
+              width: parent.width
+              label: "Default search mode"
+              options: [
+                { value: "auto", label: "Auto" },
+                { value: "apps", label: "Apps" },
+                { value: "files", label: "Files" }
+              ]
+              value: settings.defaultMode
+              onChanged: { settings.defaultMode = value; settings.save() }
+            }
+
+            Toggle {
+              width: parent.width
+              label: "Show hidden by default"
+              description: "Include dotfiles in file and directory searches"
+              checked: settings.showHidden
+              onClicked: { settings.showHidden = !settings.showHidden; settings.save() }
+            }
+          }
+
           Text {
-            visible: root.showHint
+            visible: root.showHint && !root.settingsOpen
             anchors.top: parent.top
             anchors.left: parent.left
             anchors.right: parent.right
@@ -961,7 +1090,7 @@ Item {
 
           GridView {
             id: appGrid
-            visible: root.gridMode && !root.showHint
+            visible: root.gridMode && !root.showHint && !root.settingsOpen
             clip: true
             interactive: true
             boundsBehavior: Flickable.StopAtBounds
@@ -988,7 +1117,7 @@ Item {
 
           Column {
             id: listColumn
-            visible: !root.gridMode && !root.showHint
+            visible: !root.gridMode && !root.showHint && !root.settingsOpen
             anchors.top: parent.top
             anchors.left: parent.left
             anchors.right: parent.right

@@ -1,10 +1,10 @@
 {
   "schemaVersion": 1,
-  "id": "glvr.ninja.spotlight",
-  "name": "QS Spotlight",
-  "version": "0.1.0",
+  "id": "glvr.ninja.obscure",
+  "name": "Obscure",
+  "version": "0.2.0",
   "author": "glvr",
-  "description": "Spotlight-style launcher for Omarchy: apps, files, directories, and smart search.",
+  "description": "Obscure — spotlight-style launcher for Omarchy: apps, files, directories, and smart search.",
   "kinds": [
     "menu",
     "bar-widget"
@@ -14,8 +14,8 @@
     "barWidget": "SpotlightBar.qml"
   },
   "barWidget": {
-    "displayName": "Spotlight",
-    "description": "Toggle the spotlight launcher",
+    "displayName": "Obscure",
+    "description": "Toggle the Obscure launcher",
     "category": "System",
     "allowMultiple": false
   },
