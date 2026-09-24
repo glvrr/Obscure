@@ -54,3 +54,51 @@ function score(text, query) {
   if (i === q.length) return hay.length * 2 + 50
   return -1
 }
+
+// Raw leading-flag prefix of "raw", i.e. everything parseQuery consumed before
+// the actual query (e.g. "-g " or "-. -p "), derived from the trimmed rest.
+function prefix(raw, parsed) {
+  if (!parsed) parsed = parseQuery(raw)
+  return String(raw || "").slice(0, String(raw || "").length - String(parsed.query).length)
+}
+
+// A leading flag becomes a chip once it is followed by a separator space or
+// by query text. A bare "-g" with nothing after it is still being typed and
+// stays raw text.
+function swallowed(raw, parsed) {
+  if (!parsed) parsed = parseQuery(raw)
+  if (parsed.flag === "" && !parsed.hidden) return false
+  var p = prefix(raw, parsed)
+  if (p === "") return false
+  return parsed.query !== "" || /\s+$/.test(p)
+}
+
+const CHIP_NAMES = {
+  files: "files",
+  dirs: "dirs",
+  web: "google",
+  pinterest: "pinterest",
+  apps: "apps",
+  menu: "omarchy",
+  run: "run",
+  hidden: "hidden"
+}
+
+// Full-name labels for the confirmed leading flags, in typed order.
+function chipLabels(raw, parsed) {
+  if (!parsed) parsed = parseQuery(raw)
+  if (!swallowed(raw, parsed)) return []
+  var toks = prefix(raw, parsed).trim().split(/\s+/)
+  var labels = []
+  for (var i = 0; i < toks.length; i++) {
+    var t = toks[i]
+    if (!/^-[a-z.]$/.test(t)) continue
+    if (t === "-.") {
+      labels.push("hidden")
+      continue
+    }
+    var mode = MODES[t[1]]
+    if (mode && CHIP_NAMES[mode]) labels.push(CHIP_NAMES[mode])
+  }
+  return labels
+}

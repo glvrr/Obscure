@@ -12,6 +12,11 @@ TextField {
   property string tabMode: "apps"
   property string suggestion: ""
   property bool gridActive: false
+  // Set by Spotlight from the full raw query: when a leading flag is
+  // confirmed (followed by a space/text) the field edits only the part after
+  // the chips, so parsing THIS field's text alone yields no flags.
+  property bool filterActive: false
+  property string rawMode: "auto"
   readonly property var parsed: Flags.parseQuery(root.text)
   readonly property string flag: root.parsed.flag
   readonly property string stripped: root.parsed.query
@@ -22,6 +27,10 @@ TextField {
   signal cycleMode(int dir)
   signal navigateGrid(int dir)
   signal hotkey(int num)
+  signal removeFilter()
+
+  // Default content origin (text/caret column) before chip offset kicks in.
+  readonly property int defaultLeftPadding: Math.round(root.horizontalPadding + Border.left(root._borderSpec))
 
   placeholderText: root.placeholderFor()
   selectByMouse: true
@@ -32,7 +41,10 @@ TextField {
     if ((event.modifiers & Qt.ControlModifier) && event.key >= Qt.Key_1 && event.key <= Qt.Key_5) {
       root.hotkey(event.key - Qt.Key_1 + 1)
       event.accepted = true
-    } else if (root.text === "" && (event.key === Qt.Key_Left || event.key === Qt.Key_Right)) {
+    } else if (event.key === Qt.Key_Backspace && root.filterActive && root.cursorPosition === 0 && root.selectedText.length === 0) {
+      root.removeFilter()
+      event.accepted = true
+    } else if (root.text === "" && !root.filterActive && (event.key === Qt.Key_Left || event.key === Qt.Key_Right)) {
       var dir = event.key === Qt.Key_Right ? 1 : -1
       if (root.gridActive) {
         root.navigateGrid(dir)
@@ -47,14 +59,15 @@ TextField {
   }
 
   function placeholderFor() {
-    if (root.flag) {
-      switch (root.mode) {
+    if (root.rawMode !== "auto") {
+      switch (root.rawMode) {
       case "web": return "Search Google..."
       case "run": return "Run a command..."
       case "menu": return "Search Omarchy menu..."
       case "dirs": return "Search directories..."
       case "files": return "Search files..."
       case "apps": return "Search apps..."
+      case "pinterest": return "Search Pinterest..."
       }
     }
     if (root.tabMode === "files") return "Search files...  (-f file  -d dir  -g web  -p pinterest  -r run  -. hidden)"

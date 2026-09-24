@@ -61,6 +61,25 @@ Item {
 
   readonly property bool hasFlag: root.flag !== ""
 
+  // Confirmed leading flags (followed by a space/text) render as chips in
+  // front of the query; the field then edits only the part after them.
+  readonly property bool filterActive: Flags.swallowed(root.query, root.parsed)
+  readonly property var chips: Flags.chipLabels(root.query, root.parsed)
+  readonly property string visiblePart: root.filterActive ? root.stripped : root.query
+
+  function applyFieldText(part) {
+    if (root.filterActive) {
+      root.query = Flags.prefix(root.query, root.parsed) + part
+    } else {
+      root.query = part
+    }
+  }
+
+  function removeFilter() {
+    root.query = root.stripped
+    queryField.cursorPosition = 0
+  }
+
   // A flag wins over the tab; otherwise the tab decides.
   readonly property bool inApps: root.hasFlag
     ? root.parsedMode === "apps"
@@ -351,7 +370,12 @@ Item {
   }
 
   function completeSuggestion() {
-    if (root.suggestionText !== "") root.query = root.suggestionText
+    if (root.suggestionText === "") return
+    if (root.filterActive) {
+      root.query = Flags.prefix(root.query, root.parsed) + root.suggestionText
+    } else {
+      root.query = root.suggestionText
+    }
   }
 
   function launchApp(g) {
@@ -755,20 +779,83 @@ Item {
             }
           }
 
-          QueryBar {
-            id: queryField
+          // Query line host. Once a leading flag is confirmed, the chips
+          // render over the left edge of the field and the field edits only
+          // the part after them; the full raw query stays root.query.
+          Item {
             Layout.fillWidth: true
             Layout.alignment: Qt.AlignVCenter
-            tabMode: root.activeTab
-            gridActive: root.gridMode && root.gridEngaged
-            text: root.query
-            suggestion: root.suggestionText
-            onTextChanged: root.query = queryField.text
-            onActivate: root.activate()
-            onTabComplete: root.completeSuggestion()
-            onCycleMode: root.cycleMode(dir)
-            onNavigateGrid: root.gridStep(dir)
-            onHotkey: root.onHotkey(num)
+            Layout.preferredHeight: queryField.implicitHeight
+
+            QueryBar {
+              id: queryField
+              anchors.fill: parent
+              tabMode: root.activeTab
+              gridActive: root.gridMode && root.gridEngaged
+              filterActive: root.filterActive
+              rawMode: root.parsedMode
+              text: root.visiblePart
+              leftPadding: root.filterActive
+                ? queryField.defaultLeftPadding + chipRow.width + Style.spacing.xs
+                : queryField.defaultLeftPadding
+              suggestion: root.suggestionText
+              onTextChanged: root.applyFieldText(queryField.text)
+              onActivate: root.activate()
+              onTabComplete: root.completeSuggestion()
+              onCycleMode: root.cycleMode(dir)
+              onNavigateGrid: root.gridStep(dir)
+              onHotkey: root.onHotkey(num)
+              onRemoveFilter: root.removeFilter()
+            }
+
+            Row {
+              id: chipRow
+              visible: root.filterActive
+              x: queryField.defaultLeftPadding
+              y: Math.round((parent.height - height) / 2)
+              spacing: Style.spacing.xs
+              z: queryField.z + 1
+
+              Repeater {
+                model: root.chips
+                delegate: Rectangle {
+                  height: Math.round(Style.font.heading + Style.spacing.xs)
+                  width: chipText.implicitWidth + Style.space(8)
+                  radius: Math.max(2, Style.cornerRadius)
+                  color: Qt.rgba(Color.menu.selectedBackground.r, Color.menu.selectedBackground.g, Color.menu.selectedBackground.b, 0.85)
+                  border.width: Math.max(1, Style.space(1))
+                  border.color: Util.alpha(Color.menu.selectedText, 0.35)
+
+                  Text {
+                    id: chipText
+                    anchors.top: parent.top
+                    anchors.bottom: parent.bottom
+                    anchors.left: parent.left
+                    anchors.right: parent.right
+                    anchors.leftMargin: Style.space(4)
+                    anchors.rightMargin: Style.space(4)
+                    text: modelData
+                    font.family: Style.font.family
+                    font.pixelSize: Style.font.bodySmall
+                    color: Color.menu.selectedText
+                    verticalAlignment: Text.AlignVCenter
+                    horizontalAlignment: Text.AlignHCenter
+                  }
+                }
+              }
+            }
+
+            // Clicking a chip moves the caret to the start of the query text
+            // (no editing of the chip itself, no mode cycling).
+            MouseArea {
+              visible: chipRow.visible
+              anchors.fill: chipRow
+              z: chipRow.z + 1
+              onClicked: function() {
+                queryField.cursorPosition = 0
+                queryField.forceActiveFocus()
+              }
+            }
           }
         }
 
