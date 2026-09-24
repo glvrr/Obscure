@@ -21,6 +21,7 @@ TextField {
   signal tabComplete()
   signal cycleMode(int dir)
   signal navigateGrid(int dir)
+  signal hotkey(int num)
 
   placeholderText: root.placeholderFor()
   selectByMouse: true
@@ -28,7 +29,10 @@ TextField {
   onAccepted: root.activate()
 
   Keys.onPressed: function(event) {
-    if (root.text === "" && (event.key === Qt.Key_Left || event.key === Qt.Key_Right)) {
+    if ((event.modifiers & Qt.ControlModifier) && event.key >= Qt.Key_1 && event.key <= Qt.Key_5) {
+      root.hotkey(event.key - Qt.Key_1 + 1)
+      event.accepted = true
+    } else if (root.text === "" && (event.key === Qt.Key_Left || event.key === Qt.Key_Right)) {
       var dir = event.key === Qt.Key_Right ? 1 : -1
       if (root.gridActive) {
         root.navigateGrid(dir)

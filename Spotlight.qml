@@ -388,6 +388,28 @@ Item {
     queryField.forceActiveFocus()
   }
 
+  // In-card hotkeys (UI_SCHEME.md [hotkeys]): CTRL+1 opens the standard
+  // omarchy menu, CTRL+2/3 force the APPS/FILES tab, CTRL+4/5 prefill the
+  // query line with -g / -p so Enter hands the typed query to the search.
+  function onHotkey(num) {
+    if (num === 1) {
+      root.openOmarchy()
+      return
+    }
+    if (num === 2) {
+      root.setTab("apps")
+      return
+    }
+    if (num === 3) {
+      root.setTab("files")
+      return
+    }
+    if (num === 4) root.query = "-g "
+    else if (num === 5) root.query = "-p "
+    queryField.forceActiveFocus()
+    queryField.positionLength = 0
+  }
+
   // ---- activation ----
   // Enter routes automatically: the selected app/file opens, and any mode
   // with no matches (or flag -g) falls back to a Google search.
@@ -657,6 +679,9 @@ Item {
           if (event.key === Qt.Key_Escape) {
             root.close()
             event.accepted = true
+          } else if ((event.modifiers & Qt.ControlModifier) && event.key >= Qt.Key_1 && event.key <= Qt.Key_5) {
+            root.onHotkey(event.key - Qt.Key_1 + 1)
+            event.accepted = true
           } else if (root.hasFlag) {
             if (root.inApps) {
               root.gridKeys(event)
@@ -741,6 +766,7 @@ Item {
             onTabComplete: root.completeSuggestion()
             onCycleMode: root.cycleMode(dir)
             onNavigateGrid: root.gridStep(dir)
+            onHotkey: root.onHotkey(num)
           }
         }
 
