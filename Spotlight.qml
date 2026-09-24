@@ -659,10 +659,11 @@ Item {
       anchors.horizontalCenter: parent.horizontalCenter
       y: Math.max(Style.gapsOut, Math.round((window.height - card.height) / 2))
       color: root.cardColor
-      // No enclosing outline: every control (O / APPS / FILES / query line)
-      // carries its own border, so the panel reads as separate outlined
-      // islands on the plain surface, not one bordered window.
-      borderSpec: Border.none()
+      // The card carries Hyprland's active-window outline (theme [hyprland]
+      // active-border token) so it reads as a focused window over the scrim,
+      // while the interior keeps the islands (O / APPS / FILES / query line)
+      // as separate outlined controls.
+      borderSpec: Border.hyprlandActiveSpec(Color.accent, Math.max(1, Style.space(2)))
 
       // Clicking empty card space returns focus to the query line.
       MouseArea {
