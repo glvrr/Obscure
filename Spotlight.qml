@@ -943,7 +943,7 @@ Item {
               onNavigateGrid: root.gridStep(dir)
               onHotkey: root.onHotkey(cmd)
               onRemoveFilter: root.removeFilter()
-              onEscape: {
+              onEscapeKey: {
                 if (root.settingsOpen) root.settingsOpen = false
                 else root.close()
               }

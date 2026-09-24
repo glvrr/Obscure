@@ -28,7 +28,7 @@ TextField {
   signal navigateGrid(int dir)
   signal hotkey(string cmd)
   signal removeFilter()
-  signal escape()
+  signal escapeKey()
 
   // Default content origin (text/caret column) before chip offset kicks in.
   readonly property int defaultLeftPadding: Math.round(root.horizontalPadding + Border.left(root._borderSpec))
@@ -40,7 +40,7 @@ TextField {
 
   Keys.onPressed: function(event) {
     if (event.key === Qt.Key_Escape) {
-      root.escape()
+      root.escapeKey()
       event.accepted = true
     } else if ((event.modifiers & Qt.ControlModifier) && Flags.ctrlCommand(event.key, true) !== "") {
       root.hotkey(Flags.ctrlCommand(event.key, true))
