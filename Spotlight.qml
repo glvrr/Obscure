@@ -457,9 +457,13 @@ Item {
   function activate() {
     if (root._opening) return
     if (root._activating) return
-    // The O island is highlight-only: Enter there (idle query line) does
-    // nothing and does not close the card.
-    if (root.headerPos === "omarchy" && !root.hasFlag && root.stripped === "") return
+    // Enter on the highlighted O island hands off to the stock Omarchy menu,
+    // exactly like its click. headerPos resets as soon as the user types, so
+    // the query line is always idle here.
+    if (root.headerPos === "omarchy") {
+      root.openOmarchy()
+      return
+    }
     root._activating = true
     try {
       if (root.hasFlag) {
