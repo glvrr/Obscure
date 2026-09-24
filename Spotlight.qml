@@ -61,7 +61,7 @@ Item {
   readonly property string flag: root.parsed.flag
   readonly property string stripped: root.parsed.query
   readonly property string parsedMode: root.parsed.mode
-  readonly property bool hidden: root.parsed.hidden || root.settings.showHidden
+  readonly property bool hidden: root.parsed.hidden || root.store.showHidden
 
   readonly property bool hasFlag: root.flag !== ""
 
@@ -308,12 +308,12 @@ Item {
     root._opening = false
     root.query = String(payload.query || "")
     root.headerPos = ""
-    var def = root.settings.ready ? root.settings.defaultMode : ""
+    var def = root.store.ready ? root.store.defaultMode : ""
     var wanted = payload.tab === "files" ? "files" : payload.tab === "apps" ? "apps" : ""
-    if (wanted === "apps" && !root.settings.showApps) wanted = ""
-    if (wanted === "files" && !root.settings.showFiles) wanted = ""
-    if (def === "apps" && !root.settings.showApps) def = ""
-    if (def === "files" && !root.settings.showFiles) def = ""
+    if (wanted === "apps" && !root.store.showApps) wanted = ""
+    if (wanted === "files" && !root.store.showFiles) wanted = ""
+    if (def === "apps" && !root.store.showApps) def = ""
+    if (def === "files" && !root.store.showFiles) def = ""
     root.activeTab = wanted === "" && (def === "apps" || def === "files") ? def : wanted
     root.settingsOpen = !!payload.settings
     root.selectedIndex = 0
@@ -426,9 +426,9 @@ Item {
     // the idle query line ("auto"); the cycle wraps. Islands turned off in
     // the settings are skipped, and the query line can never be disabled.
     var order = []
-    if (root.settings.showO) order.push("omarchy")
-    if (root.settings.showApps) order.push("apps")
-    if (root.settings.showFiles) order.push("files")
+    if (root.store.showO) order.push("omarchy")
+    if (root.store.showApps) order.push("apps")
+    if (root.store.showFiles) order.push("files")
     order.push("")
     if (order.length === 1) return
     var i = order.indexOf(root.headerPos)
@@ -712,21 +712,21 @@ Item {
   }
 
   SettingsStore {
-    id: settings
+    id: store
 
     // A hidden island must not leave a mode selected with no way to leave it
     // by click; fall back to the idle line (keyboard cycling already skips
     // the disabled islands).
     onShowAppsChanged: {
-      if (!settings.showApps && root.activeTab === "apps") root.activeTab = ""
+      if (!store.showApps && root.activeTab === "apps") root.activeTab = ""
       if (root.opened) root.refreshResults()
     }
     onShowFilesChanged: {
-      if (!settings.showFiles && root.activeTab === "files") root.activeTab = ""
+      if (!store.showFiles && root.activeTab === "files") root.activeTab = ""
       if (root.opened) root.refreshResults()
     }
     onShowOChanged: {
-      if (!settings.showO && root.headerPos === "omarchy") root.headerPos = ""
+      if (!store.showO && root.headerPos === "omarchy") root.headerPos = ""
     }
   }
 
@@ -891,7 +891,7 @@ Item {
 
               OmarchyIcon {
                 Layout.alignment: Qt.AlignVCenter
-                visible: root.settings.showO
+                visible: root.store.showO
                 active: root.headerPos === "omarchy"
                 onClicked: root.openOmarchy()
               }
@@ -900,7 +900,7 @@ Item {
                 id: appsTab
                 text: "APPS"
                 icon: "\uf00a"
-                visible: root.settings.showApps
+                visible: root.store.showApps
                 active: !root.hasFlag && root.activeTab === "apps"
                 onClicked: root.toggleTab("apps")
               }
@@ -909,7 +909,7 @@ Item {
                 id: filesTab
                 text: "FILES"
                 icon: "\uf07b"
-                visible: root.settings.showFiles
+                visible: root.store.showFiles
                 active: !root.hasFlag && root.activeTab === "files"
                 onClicked: root.toggleTab("files")
               }
@@ -1028,24 +1028,24 @@ Item {
               width: parent.width
               label: "Omarchy island"
               description: "Show the O button that opens the Omarchy menu"
-              checked: settings.showO
-              onClicked: { settings.showO = !settings.showO; settings.save() }
+              checked: store.showO
+              onClicked: { store.showO = !store.showO; store.save() }
             }
 
             Toggle {
               width: parent.width
               label: "Apps island"
               description: "Show the APPS search button"
-              checked: settings.showApps
-              onClicked: { settings.showApps = !settings.showApps; settings.save() }
+              checked: store.showApps
+              onClicked: { store.showApps = !store.showApps; store.save() }
             }
 
             Toggle {
               width: parent.width
               label: "Files island"
               description: "Show the FILES search button"
-              checked: settings.showFiles
-              onClicked: { settings.showFiles = !settings.showFiles; settings.save() }
+              checked: store.showFiles
+              onClicked: { store.showFiles = !store.showFiles; store.save() }
             }
 
             PanelSeparator {
@@ -1060,16 +1060,16 @@ Item {
                 { value: "apps", label: "Apps" },
                 { value: "files", label: "Files" }
               ]
-              value: settings.defaultMode
-              onChanged: { settings.defaultMode = value; settings.save() }
+              value: store.defaultMode
+              onChanged: { store.defaultMode = value; store.save() }
             }
 
             Toggle {
               width: parent.width
               label: "Show hidden by default"
               description: "Include dotfiles in file and directory searches"
-              checked: settings.showHidden
-              onClicked: { settings.showHidden = !settings.showHidden; settings.save() }
+              checked: store.showHidden
+              onClicked: { store.showHidden = !store.showHidden; store.save() }
             }
           }
 
