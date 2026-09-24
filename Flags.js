@@ -11,12 +11,15 @@ const MODES = {
   r: "run"
 }
 
-// Splits "text" into { mode, flag, query, hidden }.
+// Splits "text" into { mode, flag, query, hidden, flags }.
 // Leading `-x` tokens (x a known flag letter) select the mode, `-.` toggles
 // hidden files; both are stripped from the query. Anything else keeps "auto".
+// `flag`/`mode` stay the FIRST flag (drives the UI), `flags` lists every mode
+// flag present in oder without repeats so multiple requests can all dispatch.
 function parseQuery(text) {
   var raw = String(text || "")
   var flag = ""
+  var flags = []
   var hidden = false
   var m
   var re = /^\s*-([a-z.])(?:\s+|$)/
@@ -29,12 +32,13 @@ function parseQuery(text) {
     }
     if (MODES[token]) {
       if (flag === "") flag = token
+      if (flags.indexOf(token) < 0) flags.push(token)
       raw = raw.replace(m[0], "").trim()
       continue
     }
     break
   }
-  return { mode: flag ? MODES[flag] : "auto", flag: flag, query: raw.trim(), hidden: hidden }
+  return { mode: flag ? MODES[flag] : "auto", flag: flag, query: raw.trim(), hidden: hidden, flags: flags }
 }
 
 // Simple text rank for extra result ordering. Lower is better; -1 = no match.

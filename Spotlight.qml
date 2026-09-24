@@ -467,6 +467,11 @@ Item {
     root._activating = true
     try {
       if (root.hasFlag) {
+        var req = root.requestModes()
+        if (req.length >= 2) {
+          root.runRequests(req, root.stripped)
+          return
+        }
         root.runMode(root.parsedMode, root.stripped)
         return
       }
@@ -515,6 +520,42 @@ Item {
     } finally {
       root._activating = false
     }
+  }
+
+  // Flag tokens that fire an external action with the query, in typed order.
+  readonly property var requestModeMap: ({ g: "web", p: "pinterest", r: "run", o: "menu" })
+
+  function requestModes() {
+    var out = []
+    var fl = root.parsed.flags || []
+    for (var i = 0; i < fl.length; i++) {
+      var m = root.requestModeMap[fl[i]]
+      if (m && out.indexOf(m) < 0) out.push(m)
+    }
+    return out
+  }
+
+  // Execute several external actions at once (e.g. "-g -p cats" opens Google
+  // and Pinterest). The card closes once after all of them are dispatched.
+  function runRequests(modes, q) {
+    root._opening = true
+    for (var i = 0; i < modes.length; i++) {
+      switch (modes[i]) {
+      case "web":
+        if (q) Quickshell.execDetached(["omarchy", "launch", "browser", Search.googleUrl(q)])
+        break
+      case "pinterest":
+        if (q) Quickshell.execDetached(["omarchy", "launch", "browser", Search.pinterestUrl(q)])
+        break
+      case "run":
+        if (q) Quickshell.execDetached(["bash", "-lc", q])
+        break
+      case "menu":
+        Quickshell.execDetached(["omarchy-shell", "shell", "toggle", "omarchy.menu", JSON.stringify({ menu: "root" })])
+        break
+      }
+    }
+    root.close()
   }
 
   function runMode(mode, q) {
