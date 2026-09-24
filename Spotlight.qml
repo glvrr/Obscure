@@ -310,11 +310,17 @@ Item {
     root._opening = false
     var q = String(payload.query || "")
     // Default search flags are prefilled on every open except the settings
-    // entry (right-click/CTRL+K), which keeps a clean line. Stored verbatim
-    // so "-g " already forms its chip when the card opens.
+    // entry (right-click/CTRL+K), which keeps a clean line. Storage stays
+    // verbatim ("-p" or "-g "), but at open the flags get a single trailing
+    // separator so the very first keystroke appends the query ("-p cats",
+    // live chip) instead of glueing into the literal "-pcats".
     var fl = store.ready && !payload.settings ? String(store.defaultFlags || "") : ""
-    if (!/\S/.test(fl)) fl = ""
-    root.query = fl === "" ? q : (q === "" ? fl : fl.replace(/\s+$/, "") + " " + q)
+    if (/\S/.test(fl)) {
+      fl = fl.replace(/\s+$/, "") + " "
+    } else {
+      fl = ""
+    }
+    root.query = q === "" ? fl : fl + q
     root.headerPos = ""
     var def = store.ready ? store.defaultMode : ""
     var wanted = payload.tab === "files" ? "files" : payload.tab === "apps" ? "apps" : ""
