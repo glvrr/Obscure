@@ -95,5 +95,8 @@ Item {
     }
   }
 
-  Component.onCompleted: Qt.callLater(root.load)
+  Component.onCompleted: {
+    console.log("[obscure] settings store booted")
+    Qt.callLater(root.load)
+  }
 }
