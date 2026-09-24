@@ -9,7 +9,9 @@ const MODES = {
   i: "images",
   a: "apps",
   o: "menu",
-  r: "run"
+  r: "run",
+  "as": "artstation",
+  "sf": "sketchfab"
 }
 
 // Splits "text" into { mode, flag, query, hidden, flags }.
@@ -23,7 +25,9 @@ function parseQuery(text) {
   var flags = []
   var hidden = false
   var m
-  var re = /^\s*-([a-z.])(?:\s+|$)/
+  // Tokens are single letters plus the two-letter flags (-as/-sf); the
+  // alternation + backtracking keep "-af cats" and "-a ca..." as raw text.
+  var re = /^\s*-((?:as|sf|[a-z.]))(?:\s+|$)/
   while ((m = re.exec(raw))) {
     var token = m[1]
     if (token === ".") {
@@ -99,7 +103,9 @@ const CHIP_NAMES = {
   apps: "apps",
   menu: "omarchy",
   run: "run",
-  hidden: "hidden"
+  hidden: "hidden",
+  "artstation": "artstation",
+  "sketchfab": "sketchfab"
 }
 
 // Full-name labels for the confirmed leading flags, in typed order.
@@ -110,12 +116,12 @@ function chipLabels(raw, parsed) {
   var labels = []
   for (var i = 0; i < toks.length; i++) {
     var t = toks[i]
-    if (!/^-[a-z.]$/.test(t)) continue
+    if (!/^-[a-z.]+$/.test(t)) continue
     if (t === "-.") {
       labels.push("hidden")
       continue
     }
-    var mode = MODES[t[1]]
+    var mode = MODES[t.substring(1)]
     if (mode && CHIP_NAMES[mode]) labels.push(CHIP_NAMES[mode])
   }
   return labels

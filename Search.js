@@ -21,3 +21,11 @@ function imagesUrl(query) {
 function pinterestUrl(query) {
   return "https://www.pinterest.com/search/pins/?q=" + encodeURIComponent(String(query || ""))
 }
+
+function artstationUrl(query) {
+  return "https://www.artstation.com/search?query=" + encodeURIComponent(String(query || ""))
+}
+
+function sketchfabUrl(query) {
+  return "https://sketchfab.com/search?type=models&q=" + encodeURIComponent(String(query || ""))
+}

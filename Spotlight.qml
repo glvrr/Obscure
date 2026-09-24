@@ -127,6 +127,8 @@ Item {
       if (root.parsedMode === "web") return "Search Google for \u201C" + root.stripped + "\u201D"
       if (root.parsedMode === "pinterest") return "Search Pinterest for \u201C" + root.stripped + "\u201D"
       if (root.parsedMode === "images") return "Google Images for \u201C" + root.stripped + "\u201D"
+      if (root.parsedMode === "artstation") return "Search ArtStation for \u201C" + root.stripped + "\u201D"
+      if (root.parsedMode === "sketchfab") return "Search Sketchfab for \u201C" + root.stripped + "\u201D"
       if (root.parsedMode === "run") return "Run: " + root.stripped
       if (root.parsedMode === "menu") return "Open Omarchy menu and search"
       if (root.parsedMode === "apps" && root.stripped !== "" && root.gridItems.length === 0)
@@ -298,15 +300,21 @@ Item {
   }
 
   // Fixed height of the settings panel: section header + 3 island toggles +
-  // separator + default-mode row + show-hidden toggle.
-  readonly property int settingsPanelHeight: Style.space(300)
+  // separator + default-mode row + show-hidden toggle + default-flags field.
+  readonly property int settingsPanelHeight: Style.space(348)
 
   // ---- host lifecycle ----
   function open(payloadJson) {
     var payload = ({})
     try { payload = JSON.parse(payloadJson || "{}") } catch (e) { payload = ({}) }
     root._opening = false
-    root.query = String(payload.query || "")
+    var q = String(payload.query || "")
+    // Default search flags are prefilled on every open except the settings
+    // entry (right-click/CTRL+K), which keeps a clean line. Stored verbatim
+    // so "-g " already forms its chip when the card opens.
+    var fl = store.ready && !payload.settings ? String(store.defaultFlags || "") : ""
+    if (!/\S/.test(fl)) fl = ""
+    root.query = fl === "" ? q : (q === "" ? fl : fl.replace(/\s+$/, "") + " " + q)
     root.headerPos = ""
     var def = store.ready ? store.defaultMode : ""
     var wanted = payload.tab === "files" ? "files" : payload.tab === "apps" ? "apps" : ""
@@ -559,7 +567,7 @@ Item {
   }
 
   // Flag tokens that fire an external action with the query, in typed order.
-  readonly property var requestModeMap: ({ g: "web", p: "pinterest", i: "images", r: "run", o: "menu" })
+  readonly property var requestModeMap: ({ g: "web", p: "pinterest", i: "images", "as": "artstation", "sf": "sketchfab", r: "run", o: "menu" })
 
   function requestModes() {
     var out = []
@@ -585,6 +593,12 @@ Item {
         break
       case "images":
         if (q) Quickshell.execDetached(["omarchy", "launch", "browser", Search.imagesUrl(q)])
+        break
+      case "artstation":
+        if (q) Quickshell.execDetached(["omarchy", "launch", "browser", Search.artstationUrl(q)])
+        break
+      case "sketchfab":
+        if (q) Quickshell.execDetached(["omarchy", "launch", "browser", Search.sketchfabUrl(q)])
         break
       case "run":
         if (q) Quickshell.execDetached(["bash", "-lc", q])
@@ -634,6 +648,20 @@ Item {
       if (!q) return
       root._opening = true
       Quickshell.execDetached(["omarchy", "launch", "browser", Search.imagesUrl(q)])
+      root.close()
+      break
+    }
+    case "artstation": {
+      if (!q) return
+      root._opening = true
+      Quickshell.execDetached(["omarchy", "launch", "browser", Search.artstationUrl(q)])
+      root.close()
+      break
+    }
+    case "sketchfab": {
+      if (!q) return
+      root._opening = true
+      Quickshell.execDetached(["omarchy", "launch", "browser", Search.sketchfabUrl(q)])
       root.close()
       break
     }
@@ -1077,6 +1105,28 @@ Item {
               description: "Include dotfiles in file and directory searches"
               checked: store.showHidden
               onClicked: { store.showHidden = !store.showHidden; store.save() }
+            }
+
+            TextField {
+              id: defaultFlagsField
+              width: parent.width
+              placeholderText: "Flags prefilled on open  e.g. -g -. -p"
+              Component.onCompleted: defaultFlagsField.text = store.defaultFlags
+              onTextChanged: {
+                // Guarded: never echo an external set back into the store,
+                // so the caret is not yanked around while typing.
+                if (store.defaultFlags !== text) {
+                  store.defaultFlags = text
+                  store.save()
+                }
+              }
+              Connections {
+                target: store
+                function onDefaultFlagsChanged() {
+                  if (defaultFlagsField.text !== store.defaultFlags)
+                    defaultFlagsField.text = store.defaultFlags
+                }
+              }
             }
           }
 

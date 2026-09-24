@@ -19,6 +19,7 @@ Item {
   property bool showO: true
   property bool showApps: true
   property bool showFiles: true
+  property string defaultFlags: ""
   property bool ready: false
 
   readonly property string configPath: Quickshell.env("HOME") + "/.config/omarchy/obscure.json"
@@ -44,6 +45,9 @@ Item {
     root.showO = o.showO === undefined ? true : !!o.showO
     root.showApps = o.showApps === undefined ? true : !!o.showApps
     root.showFiles = o.showFiles === undefined ? true : !!o.showFiles
+    // Kept verbatim (no trim): "-g " with its trailing space must stay so the
+    // chip is already active the moment the card reopens.
+    root.defaultFlags = String(o.defaultFlags || "")
     root.ready = true
   }
 
@@ -64,7 +68,8 @@ Item {
         showHidden: root.showHidden,
         showO: root.showO,
         showApps: root.showApps,
-        showFiles: root.showFiles
+        showFiles: root.showFiles,
+        defaultFlags: root.defaultFlags
       }
       var file = root.configPath
       writeProc.command = ["sh", "-lc",
