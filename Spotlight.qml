@@ -80,6 +80,24 @@ Item {
     queryField.cursorPosition = 0
   }
 
+  // Chip colors stay theme-driven: the pill uses the accent and the label
+  // text picks whichever of the two menu surfaces contrasts harder with it,
+  // so both dark and light themes stay readable.
+  function relLum(c) {
+    var f = function(v) { return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4) }
+    return 0.2126 * f(c.r) + 0.7152 * f(c.g) + 0.0722 * f(c.b)
+  }
+  function contrastOf(a, b) {
+    var la = root.relLum(a), lb = root.relLum(b)
+    if (la < lb) { var t = la; la = lb; lb = t }
+    return (la + 0.05) / (lb + 0.05)
+  }
+  function chipTextColor() {
+    var a = Color.accent
+    var c1 = Color.menu.background, c2 = Color.menu.text
+    return root.contrastOf(a, c1) >= root.contrastOf(a, c2) ? c1 : c2
+  }
+
   // A flag wins over the tab; otherwise the tab decides.
   readonly property bool inApps: root.hasFlag
     ? root.parsedMode === "apps"
@@ -796,7 +814,7 @@ Item {
               rawMode: root.parsedMode
               text: root.visiblePart
               leftPadding: root.filterActive
-                ? queryField.defaultLeftPadding + chipRow.width + Style.spacing.xs
+                ? queryField.defaultLeftPadding + chipRow.width + Style.spacing.xs + Style.spacing.sm
                 : queryField.defaultLeftPadding
               suggestion: root.suggestionText
               onTextChanged: root.applyFieldText(queryField.text)
@@ -819,12 +837,12 @@ Item {
               Repeater {
                 model: root.chips
                 delegate: Rectangle {
-                  height: Math.round(Style.font.heading + Style.spacing.xs)
-                  width: chipText.implicitWidth + Style.space(8)
+                  height: Math.round(Style.space(24))
+                  width: chipText.implicitWidth + Style.space(14)
                   radius: Math.max(2, Style.cornerRadius)
-                  color: Qt.rgba(Color.menu.selectedBackground.r, Color.menu.selectedBackground.g, Color.menu.selectedBackground.b, 0.85)
+                  color: Color.accent
                   border.width: Math.max(1, Style.space(1))
-                  border.color: Util.alpha(Color.menu.selectedText, 0.35)
+                  border.color: Util.alpha(root.chipTextColor(), 0.30)
 
                   Text {
                     id: chipText
@@ -832,12 +850,12 @@ Item {
                     anchors.bottom: parent.bottom
                     anchors.left: parent.left
                     anchors.right: parent.right
-                    anchors.leftMargin: Style.space(4)
-                    anchors.rightMargin: Style.space(4)
+                    anchors.leftMargin: Style.space(7)
+                    anchors.rightMargin: Style.space(7)
                     text: modelData
                     font.family: Style.font.family
-                    font.pixelSize: Style.font.bodySmall
-                    color: Color.menu.selectedText
+                    font.pixelSize: Style.font.title
+                    color: root.chipTextColor()
                     verticalAlignment: Text.AlignVCenter
                     horizontalAlignment: Text.AlignHCenter
                   }
