@@ -831,7 +831,14 @@ Item {
       Item {
         id: keyCatcher
         anchors.fill: parent
-        anchors.margins: Style.spacing.md
+        // Same visual gutter on every edge. Inset top/bottom = spacing.md, and
+        // the header/list rows add ~8px of vertical slack, so the sides use the
+        // popup padding token to land on the same perceived distance from the
+        // islands and the query line.
+        anchors.topMargin: Style.spacing.md
+        anchors.bottomMargin: Style.spacing.md
+        anchors.leftMargin: Style.spacing.popupPadding
+        anchors.rightMargin: Style.spacing.popupPadding
 
         Keys.onPressed: function(event) {
           if (event.key === Qt.Key_Escape) {
