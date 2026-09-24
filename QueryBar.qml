@@ -26,7 +26,7 @@ TextField {
   signal tabComplete()
   signal cycleMode(int dir)
   signal navigateGrid(int dir)
-  signal hotkey(int num)
+  signal hotkey(string cmd)
   signal removeFilter()
 
   // Default content origin (text/caret column) before chip offset kicks in.
@@ -38,8 +38,8 @@ TextField {
   onAccepted: root.activate()
 
   Keys.onPressed: function(event) {
-    if ((event.modifiers & Qt.ControlModifier) && event.key >= Qt.Key_1 && event.key <= Qt.Key_5) {
-      root.hotkey(event.key - Qt.Key_1 + 1)
+    if ((event.modifiers & Qt.ControlModifier) && Flags.ctrlCommand(event.key, true) !== "") {
+      root.hotkey(Flags.ctrlCommand(event.key, true))
       event.accepted = true
     } else if (event.key === Qt.Key_Backspace && root.filterActive && root.cursorPosition === 0 && root.selectedText.length === 0) {
       root.removeFilter()

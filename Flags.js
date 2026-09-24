@@ -42,6 +42,18 @@ function parseQuery(text) {
   return { mode: flag ? MODES[flag] : "auto", flag: flag, query: raw.trim(), hidden: hidden, flags: flags }
 }
 
+// Ctrl-key dispatch for in-card hotkeys (Qt key codes == ASCII). Returns a
+// command token for the spotlight or "" when the combo is not a hotkey.
+// Digits: 1 menu, 2 apps, 3 files, 4 g, 5 p, 6 i, 0 r.
+// Letters: D files-dir flag, F files, G g, I i, O menu, P p, R r.
+function ctrlCommand(key, ctrl) {
+  if (!ctrl) return ""
+  var digits = { 49: "menu", 50: "apps", 51: "files", 52: "g", 53: "p", 54: "i", 48: "r" }
+  if (digits[key]) return digits[key]
+  var letters = { 68: "d", 70: "files", 71: "g", 73: "i", 79: "menu", 80: "p", 82: "r" }
+  return letters[key] || ""
+}
+
 // Simple text rank for extra result ordering. Lower is better; -1 = no match.
 function score(text, query) {
   var hay = String(text || "").toLowerCase()

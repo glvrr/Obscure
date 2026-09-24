@@ -430,24 +430,25 @@ Item {
     queryField.forceActiveFocus()
   }
 
-  // In-card hotkeys (UI_SCHEME.md [hotkeys]): CTRL+1 opens the standard
-  // omarchy menu, CTRL+2/3 force the APPS/FILES tab, CTRL+4/5 prefill the
-  // query line with -g / -p so Enter hands the typed query to the search.
-  function onHotkey(num) {
-    if (num === 1) {
+  // In-card hotkeys (UI_SCHEME.md [Hotkeys] / [Alternate controls]):
+  // CTRL+1 opens the standard omarchy menu, CTRL+2/CTRL+A force the APPS tab,
+  // CTRL+3/CTRL+F the FILES tab, CTRL+4/CTRL+G -g, CTRL+5/CTRL+P -p,
+  // CTRL+6/CTRL+I -i, CTRL+0/CTRL+R -r, CTRL+D -d. The flag ones prefill the
+  // query line so Enter hands the typed query to the requested search.
+  function onHotkey(cmd) {
+    if (cmd === "menu") {
       root.openOmarchy()
       return
     }
-    if (num === 2) {
+    if (cmd === "apps") {
       root.setTab("apps")
       return
     }
-    if (num === 3) {
+    if (cmd === "files") {
       root.setTab("files")
       return
     }
-    if (num === 4) root.query = "-g "
-    else if (num === 5) root.query = "-p "
+    root.query = "-" + cmd + " "
     queryField.forceActiveFocus()
     queryField.positionLength = 0
   }
@@ -778,8 +779,8 @@ Item {
           if (event.key === Qt.Key_Escape) {
             root.close()
             event.accepted = true
-          } else if ((event.modifiers & Qt.ControlModifier) && event.key >= Qt.Key_1 && event.key <= Qt.Key_5) {
-            root.onHotkey(event.key - Qt.Key_1 + 1)
+          } else if ((event.modifiers & Qt.ControlModifier) && Flags.ctrlCommand(event.key, true) !== "") {
+            root.onHotkey(Flags.ctrlCommand(event.key, true))
             event.accepted = true
           } else if (root.hasFlag) {
             if (root.inApps) {
@@ -878,7 +879,7 @@ Item {
               onTabComplete: root.completeSuggestion()
               onCycleMode: root.cycleMode(dir)
               onNavigateGrid: root.gridStep(dir)
-              onHotkey: root.onHotkey(num)
+              onHotkey: root.onHotkey(cmd)
               onRemoveFilter: root.removeFilter()
             }
 
