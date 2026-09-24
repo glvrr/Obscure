@@ -234,7 +234,7 @@ Item {
   readonly property color dimColor: Qt.darker(Color.menu.text, 1.45)
   readonly property color selColor: Color.menu.selectedText
 
-  property int headerHeight: Math.max(Style.space(46), Style.spacing.controlHeight + Style.spacing.md * 2)
+  property int headerHeight: Math.max(Style.space(50), Style.spacing.controlHeight + Style.spacing.md * 2)
   property int rowHeight: Style.space(50)
   property int maxVisible: 10
 
@@ -785,10 +785,10 @@ Item {
             anchors.top: parent.top
             anchors.left: parent.left
             anchors.right: parent.right
-            height: Style.space(44)
+            height: Style.space(48)
             text: root.hintText
             font.family: Style.font.menuFamily
-            font.pixelSize: Style.font.subtitle
+            font.pixelSize: Style.font.title
             color: root.dimColor
             horizontalAlignment: Text.AlignHCenter
             verticalAlignment: Text.AlignVCenter
@@ -951,7 +951,7 @@ Item {
           width: parent.width
           text: gridCell.label
           font.family: Style.font.family
-          font.pixelSize: Style.font.bodySmall
+          font.pixelSize: Style.font.body
           color: gridCell.isSelected ? root.selColor : root.fgColor
           elide: Text.ElideMiddle
           horizontalAlignment: Text.AlignHCenter

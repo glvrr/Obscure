@@ -25,7 +25,7 @@ TextField {
 
   placeholderText: root.placeholderFor()
   selectByMouse: true
-  font.pixelSize: Style.font.subtitle
+  font.pixelSize: Style.font.heading
   onAccepted: root.activate()
 
   Keys.onPressed: function(event) {
