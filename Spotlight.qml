@@ -303,6 +303,7 @@ Item {
 
   // ---- host lifecycle ----
   function open(payloadJson) {
+    console.log("[obscure] open probe store=" + typeof root.store + " fileSearch=" + typeof root.fileSearch)
     var payload = ({})
     try { payload = JSON.parse(payloadJson || "{}") } catch (e) { payload = ({}) }
     root._opening = false
