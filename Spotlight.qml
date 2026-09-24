@@ -129,6 +129,7 @@ Item {
       if (root.parsedMode === "images") return "Google Images for \u201C" + root.stripped + "\u201D"
       if (root.parsedMode === "artstation") return "Search ArtStation for \u201C" + root.stripped + "\u201D"
       if (root.parsedMode === "sketchfab") return "Search Sketchfab for \u201C" + root.stripped + "\u201D"
+      if (root.parsedMode === "youtube") return "Search YouTube for \u201C" + root.stripped + "\u201D"
       if (root.parsedMode === "run") return "Run: " + root.stripped
       if (root.parsedMode === "menu") return "Open Omarchy menu and search"
       if (root.parsedMode === "apps" && root.stripped !== "" && root.gridItems.length === 0)
@@ -576,7 +577,7 @@ Item {
   }
 
   // Flag tokens that fire an external action with the query, in typed order.
-  readonly property var requestModeMap: ({ g: "web", p: "pinterest", i: "images", "as": "artstation", "sf": "sketchfab", r: "run", o: "menu" })
+  readonly property var requestModeMap: ({ g: "web", p: "pinterest", i: "images", "as": "artstation", "sf": "sketchfab", y: "youtube", r: "run", o: "menu" })
 
   function requestModes() {
     var out = []
@@ -608,6 +609,9 @@ Item {
         break
       case "sketchfab":
         if (q) Quickshell.execDetached(["omarchy", "launch", "browser", Search.sketchfabUrl(q)])
+        break
+      case "youtube":
+        if (q) Quickshell.execDetached(["omarchy", "launch", "browser", Search.youtubeUrl(q)])
         break
       case "run":
         if (q) Quickshell.execDetached(["bash", "-lc", q])
@@ -671,6 +675,13 @@ Item {
       if (!q) return
       root._opening = true
       Quickshell.execDetached(["omarchy", "launch", "browser", Search.sketchfabUrl(q)])
+      root.close()
+      break
+    }
+    case "youtube": {
+      if (!q) return
+      root._opening = true
+      Quickshell.execDetached(["omarchy", "launch", "browser", Search.youtubeUrl(q)])
       root.close()
       break
     }

@@ -11,7 +11,8 @@ const MODES = {
   o: "menu",
   r: "run",
   "as": "artstation",
-  "sf": "sketchfab"
+  "sf": "sketchfab",
+  y: "youtube"
 }
 
 // Splits "text" into { mode, flag, query, hidden, flags }.
@@ -105,7 +106,8 @@ const CHIP_NAMES = {
   run: "run",
   hidden: "hidden",
   "artstation": "artstation",
-  "sketchfab": "sketchfab"
+  "sketchfab": "sketchfab",
+  youtube: "youtube"
 }
 
 // Full-name labels for the confirmed leading flags, in typed order.

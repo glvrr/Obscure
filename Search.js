@@ -29,3 +29,7 @@ function artstationUrl(query) {
 function sketchfabUrl(query) {
   return "https://sketchfab.com/search?type=models&q=" + encodeURIComponent(String(query || ""))
 }
+
+function youtubeUrl(query) {
+  return "https://www.youtube.com/results?search_query=" + encodeURIComponent(String(query || ""))
+}
