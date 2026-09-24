@@ -227,7 +227,6 @@ Item {
   }
 
   // ---- geometry / colors ----
-  readonly property var borderSpec: Border.surfaceSpec("menu", "border", Color.menu.border, Math.max(1, Style.space(2)))
   readonly property color scrimColor: Color.menu.scrim
   readonly property color cardColor: Color.menu.background
   readonly property color fgColor: Color.menu.text
@@ -659,11 +658,12 @@ Item {
       anchors.horizontalCenter: parent.horizontalCenter
       y: Math.max(Style.gapsOut, Math.round((window.height - card.height) / 2))
       color: root.cardColor
-      // The card carries Hyprland's active-window outline (theme [hyprland]
-      // active-border token) so it reads as a focused window over the scrim,
+      // The card carries the theme's popup border ([popups] border tokens, which
+      // reference hyprland.active-border so the outline follows the theme and
+      // Hyprland's active-window border like every other overlay plugin),
       // while the interior keeps the islands (O / APPS / FILES / query line)
       // as separate outlined controls.
-      borderSpec: Border.hyprlandActiveSpec(Color.accent, Math.max(1, Style.space(2)))
+      borderSpec: Border.surfaceSpec("popups", "border", Color.popups.border, Math.max(1, Style.space(2)))
 
       // Clicking empty card space returns focus to the query line.
       MouseArea {
