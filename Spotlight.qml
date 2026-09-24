@@ -61,7 +61,7 @@ Item {
   readonly property string flag: root.parsed.flag
   readonly property string stripped: root.parsed.query
   readonly property string parsedMode: root.parsed.mode
-  readonly property bool hidden: root.parsed.hidden || root.store.showHidden
+  readonly property bool hidden: root.parsed.hidden || store.showHidden
 
   readonly property bool hasFlag: root.flag !== ""
 
@@ -303,18 +303,17 @@ Item {
 
   // ---- host lifecycle ----
   function open(payloadJson) {
-    console.log("[obscure] open probe store=" + typeof root.store + " fileSearch=" + typeof root.fileSearch)
     var payload = ({})
     try { payload = JSON.parse(payloadJson || "{}") } catch (e) { payload = ({}) }
     root._opening = false
     root.query = String(payload.query || "")
     root.headerPos = ""
-    var def = root.store.ready ? root.store.defaultMode : ""
+    var def = store.ready ? store.defaultMode : ""
     var wanted = payload.tab === "files" ? "files" : payload.tab === "apps" ? "apps" : ""
-    if (wanted === "apps" && !root.store.showApps) wanted = ""
-    if (wanted === "files" && !root.store.showFiles) wanted = ""
-    if (def === "apps" && !root.store.showApps) def = ""
-    if (def === "files" && !root.store.showFiles) def = ""
+    if (wanted === "apps" && !store.showApps) wanted = ""
+    if (wanted === "files" && !store.showFiles) wanted = ""
+    if (def === "apps" && !store.showApps) def = ""
+    if (def === "files" && !store.showFiles) def = ""
     root.activeTab = wanted === "" && (def === "apps" || def === "files") ? def : wanted
     root.settingsOpen = !!payload.settings
     root.selectedIndex = 0
@@ -427,9 +426,9 @@ Item {
     // the idle query line ("auto"); the cycle wraps. Islands turned off in
     // the settings are skipped, and the query line can never be disabled.
     var order = []
-    if (root.store.showO) order.push("omarchy")
-    if (root.store.showApps) order.push("apps")
-    if (root.store.showFiles) order.push("files")
+    if (store.showO) order.push("omarchy")
+    if (store.showApps) order.push("apps")
+    if (store.showFiles) order.push("files")
     order.push("")
     if (order.length === 1) return
     var i = order.indexOf(root.headerPos)
@@ -892,7 +891,7 @@ Item {
 
               OmarchyIcon {
                 Layout.alignment: Qt.AlignVCenter
-                visible: root.store.showO
+                visible: store.showO
                 active: root.headerPos === "omarchy"
                 onClicked: root.openOmarchy()
               }
@@ -901,7 +900,7 @@ Item {
                 id: appsTab
                 text: "APPS"
                 icon: "\uf00a"
-                visible: root.store.showApps
+                visible: store.showApps
                 active: !root.hasFlag && root.activeTab === "apps"
                 onClicked: root.toggleTab("apps")
               }
@@ -910,7 +909,7 @@ Item {
                 id: filesTab
                 text: "FILES"
                 icon: "\uf07b"
-                visible: root.store.showFiles
+                visible: store.showFiles
                 active: !root.hasFlag && root.activeTab === "files"
                 onClicked: root.toggleTab("files")
               }
