@@ -12,7 +12,7 @@ Item {
   signal clicked()
 
   readonly property bool hot: mouseArea.containsMouse
-  readonly property int iconSection: Style.spacing.controlHeight
+  readonly property int iconSection: Style.space(34)
 
   width: root.iconSection
   height: root.iconSection
@@ -32,7 +32,7 @@ Item {
     x: Math.round((root.iconSection - width) / 2)
     text: root.icon
     font.family: Style.font.menuFamily
-    font.pixelSize: Style.font.iconLarge
+    font.pixelSize: Style.font.heading + 4
     color: root.active ? Color.accent : (root.hot ? Color.foreground : Color.menu.text)
   }
 

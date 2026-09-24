@@ -707,8 +707,9 @@ Item {
           anchors.top: parent.top
           anchors.left: parent.left
           anchors.right: parent.right
-          height: root.headerHeight - Style.space(8)
-          spacing: Style.spacing.lg
+          height: root.headerHeight
+          spacing: root.showTabs ? Style.spacing.lg : 0
+          Behavior on spacing { NumberAnimation { duration: 180; easing.type: Easing.InOutQuad } }
 
           // Header islands. Each icon is its own capsule; typing or a flag
           // collapses the whole cluster in width while the query line takes

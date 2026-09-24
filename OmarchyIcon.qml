@@ -11,8 +11,8 @@ Item {
 
   readonly property bool hot: mouseArea.containsMouse
 
-  width: Style.spacing.controlHeight
-  height: Style.spacing.controlHeight
+  width: Style.space(34)
+  height: Style.space(34)
 
   Rectangle {
     id: pill
@@ -26,7 +26,7 @@ Item {
       anchors.centerIn: parent
       text: "\ue900"
       font.family: "omarchy"
-      font.pixelSize: Style.font.iconLarge
+      font.pixelSize: Style.font.heading + 4
       color: root.active ? Color.accent : (root.hot ? Color.foreground : Color.menu.text)
       verticalAlignment: Text.AlignVCenter
     }
