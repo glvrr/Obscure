@@ -332,7 +332,10 @@ Item {
     root.refreshResults()
     Qt.callLater(function() {
       queryField.forceActiveFocus()
-      queryField.selectAll()
+      // Prefilled default flags must stand: put the caret after them so the
+      // first keystroke appends the query instead of replacing the flag.
+      if (fl === "") queryField.selectAll()
+      else queryField.cursorPosition = queryField.text.length
     })
   }
 
