@@ -69,7 +69,12 @@ Item {
   // front of the query; the field then edits only the part after them.
   readonly property bool filterActive: Flags.swallowed(root.query, root.parsed)
   readonly property var chips: Flags.chipLabels(root.query, root.parsed)
-  readonly property string visiblePart: root.filterActive ? root.stripped : root.query
+  // The part the field should show: the query after the flags prefix, kept RAW
+  // (trailing spaces included). Using the trimmed `stripped` here would make
+  // the echo sync strip a just-typed trailing separator — deleting 'd' in
+  // "cat dog" lands at "cat " and the guard then rewrites it to "cat",
+  // swallowing the space together with the letter.
+  readonly property string visiblePart: root.filterActive ? root.query.slice(Flags.prefix(root.query, root.parsed).length) : root.query
 
   // The query field is NOT bound to visiblePart: a live `text:` binding that
   // re-sets the text on every keystroke (via the onTextEdited write-back)
