@@ -53,8 +53,18 @@ Item {
   property string headerPos: ""
   // Settings view: opened via CTRL+K or a right-click on the bar icon
   // (payload {"settings":true}). The content area then shows the settings
-  // panel; typing or Escape close it.
+  // panel. Edits are staged in the settingsDraft group below: nothing touches
+  // the store until Apply commits them, Close discards them.
   property bool settingsOpen: false
+  // ---- settings draft (staged until Apply) ----
+  property bool draftShowO: true
+  property bool draftShowApps: true
+  property bool draftShowFiles: true
+  property string draftDefaultMode: "auto"
+  property bool draftShowHidden: false
+  property string draftDefaultFlags: ""
+  // Keyboard cursor over the settings controls (see settingsKeys).
+  property int settingsIndex: 0
 
   // ---- parsed query + mode resolution ----
   readonly property var parsed: Flags.parseQuery(root.query)
@@ -315,9 +325,11 @@ Item {
     return root.listHeight
   }
 
-  // Fixed height of the settings panel: section header + 3 island toggles +
-  // separator + default-mode row + show-hidden toggle + default-flags field.
-  readonly property int settingsPanelHeight: Style.space(348)
+  // Height of the settings panel: header + 3 island toggles + separator +
+  // default-mode row + show-hidden toggle + flags field + buttons row. Kept
+  // derived from the real content so adding/removing a row can't overflow the
+  // fixed-height card.
+  readonly property int settingsPanelHeight: settingsControlCol.implicitHeight
 
   // ---- host lifecycle ----
   function open(payloadJson) {
@@ -357,11 +369,13 @@ Item {
       // before focusing (the onVisiblePartChanged sync also covers this, but
       // the caret math below must run on the up-to-date text).
       if (queryField.text !== root.visiblePart) queryField.text = root.visiblePart
-      queryField.forceActiveFocus()
-      // Prefilled default flags must stand: put the caret after them so the
-      // first keystroke appends the query instead of replacing the flag.
-      if (fl === "") queryField.selectAll()
-      else queryField.cursorPosition = queryField.text.length
+      if (!root.settingsOpen) {
+        queryField.forceActiveFocus()
+        // Prefilled default flags must stand: put the caret after them so the
+        // first keystroke appends the query instead of replacing the flag.
+        if (fl === "") queryField.selectAll()
+        else queryField.cursorPosition = queryField.text.length
+      }
     })
   }
 
@@ -370,6 +384,59 @@ Item {
     root.opened = false
     root.selectedIndex = 0
     root.gridIndex = 0
+  }
+
+  // ---- settings staging ----
+  // Snapshot the store into the draft on every open; Apply copies the draft
+  // back, Close just throws the draft away.
+  function seedSettings() {
+    root.draftShowO = store.showO
+    root.draftShowApps = store.showApps
+    root.draftShowFiles = store.showFiles
+    root.draftDefaultMode = store.defaultMode
+    root.draftShowHidden = store.showHidden
+    root.draftDefaultFlags = store.defaultFlags
+    root.settingsIndex = 0
+  }
+
+  function settingsMove(dir) {
+    var n = 8 // toggles x3 + dropdown + hidden toggle + flags field + Close + Apply
+    root.settingsIndex = (root.settingsIndex + dir + n) % n
+  }
+
+  function settingsActivate() {
+    switch (root.settingsIndex) {
+    case 0: showOToggle.clicked(); break
+    case 1: showAppsToggle.clicked(); break
+    case 2: showFilesToggle.clicked(); break
+    case 3: defaultModeDropdown.toggle(); break
+    case 4: showHiddenToggle.clicked(); break
+    case 5:
+      defaultFlagsField.forceActiveFocus()
+      defaultFlagsField.cursorPosition = defaultFlagsField.text.length
+      break
+    case 6: root.exitSettings(); break
+    case 7: root.settingsApply(); break
+    }
+  }
+
+  // Commit the draft into the store; the panel stays open for more tweaking.
+  function settingsApply() {
+    store.showO = root.draftShowO
+    store.showApps = root.draftShowApps
+    store.showFiles = root.draftShowFiles
+    store.defaultMode = root.draftDefaultMode
+    store.showHidden = root.draftShowHidden
+    // Kept verbatim (no trim): "-g " must survive so the chip is live on the
+    // next open, same rule as SettingsStore.apply().
+    store.defaultFlags = root.draftDefaultFlags
+    store.save()
+  }
+
+  // Discard the draft and leave the settings view.
+  function exitSettings() {
+    if (!root.settingsOpen) return
+    root.settingsOpen = false
   }
 
   function ping() { return "ok" }
@@ -510,13 +577,9 @@ Item {
       return
     }
     if (cmd === "settings") {
-      // CTRL+K toggles the settings view; typing or Escape leave it.
-      if (!root.settingsOpen) {
-        root.settingsOpen = true
-        queryField.forceActiveFocus()
-      } else {
-        root.settingsOpen = false
-      }
+      // CTRL+K toggles the settings view; the draft is seeded and the panel
+      // gets keyboard focus from onSettingsOpenChanged.
+      root.settingsOpen = !root.settingsOpen
       return
     }
     root.query = "-" + cmd + " "
@@ -726,6 +789,19 @@ Item {
   }
 
   onOpenedChanged: if (root.opened) root.refreshResults()
+  onSettingsOpenChanged: {
+    if (root.settingsOpen) {
+      root.seedSettings()
+      // Hands the panel the keyboard: the query line must NOT get focus while
+      // settings are staged, or arrow keys would drive search instead of the
+      // settings cursor.
+      Qt.callLater(function() { settingsKeys.forceActiveFocus() })
+    } else {
+      // Close/Apply/Esc leave the settings view: back to the query line.
+      root.headerPos = ""
+      queryField.forceActiveFocus()
+    }
+  }
   onQueryChanged: {
     if (!root.opened) return
     // Any typing leaves the settings view back to search.
@@ -909,7 +985,7 @@ Item {
 
         Keys.onPressed: function(event) {
           if (event.key === Qt.Key_Escape) {
-            if (root.settingsOpen) root.settingsOpen = false
+            if (root.settingsOpen) root.exitSettings()
             else root.close()
             event.accepted = true
           } else if ((event.modifiers & Qt.ControlModifier) && Flags.ctrlCommand(event.key, true) !== "") {
@@ -1017,7 +1093,7 @@ Item {
               onHotkey: root.onHotkey(cmd)
               onRemoveFilter: root.removeFilter()
               onEscapeKey: {
-                if (root.settingsOpen) root.settingsOpen = false
+                if (root.settingsOpen) root.exitSettings()
                 else root.close()
               }
             }
@@ -1092,77 +1168,138 @@ Item {
             height: root.settingsPanelHeight
             spacing: Style.spacing.sm
 
-            PanelSectionHeader {
-              width: parent.width
-              text: "UI elements"
-            }
+            // Keyboard-driven panel: this own the keys whenever settings are
+            // open. The cursor (settingsIndex + hasCursor) walks the controls
+            // with Up/Down/j/k/Tab; Enter/Space activates the target; Esc
+            // discards and closes. While the flags editor is focused or the
+            // dropdown popup is open, keys go to them instead (blocked).
+            PanelKeyCatcher {
+              id: settingsKeys
+              anchors.fill: parent
+              focus: true
+              blocked: defaultFlagsField.activeFocus || defaultModeDropdown.popupOpen
+              onMoveRequested: function(dx, dy) { root.settingsMove(dy) }
+              onTabRequested: function(dir) { root.settingsMove(dir) }
+              onActivateRequested: root.settingsActivate()
+              onCloseRequested: root.exitSettings()
 
-            Toggle {
-              width: parent.width
-              label: "Omarchy island"
-              description: "Show the O button that opens the Omarchy menu"
-              checked: store.showO
-              onClicked: { store.showO = !store.showO; store.save() }
-            }
+              Column {
+                id: settingsControlCol
+                anchors.fill: parent
+                spacing: Style.spacing.sm
 
-            Toggle {
-              width: parent.width
-              label: "Apps island"
-              description: "Show the APPS search button"
-              checked: store.showApps
-              onClicked: { store.showApps = !store.showApps; store.save() }
-            }
-
-            Toggle {
-              width: parent.width
-              label: "Files island"
-              description: "Show the FILES search button"
-              checked: store.showFiles
-              onClicked: { store.showFiles = !store.showFiles; store.save() }
-            }
-
-            PanelSeparator {
-              width: parent.width
-            }
-
-            Dropdown {
-              width: parent.width
-              label: "Default search mode"
-              options: [
-                { value: "auto", label: "Auto" },
-                { value: "apps", label: "Apps" },
-                { value: "files", label: "Files" }
-              ]
-              value: store.defaultMode
-              onChanged: { store.defaultMode = value; store.save() }
-            }
-
-            Toggle {
-              width: parent.width
-              label: "Show hidden by default"
-              description: "Include dotfiles in file and directory searches"
-              checked: store.showHidden
-              onClicked: { store.showHidden = !store.showHidden; store.save() }
-            }
-
-            TextField {
-              id: defaultFlagsField
-              width: parent.width
-              placeholderText: "Flags prefilled on open  e.g. -g -. -p"
-              Component.onCompleted: defaultFlagsField.text = store.defaultFlags
-              onTextChanged: {
-                // Guarded: never echo an external set back into the store,
-                // so the caret is not yanked around while typing.
-                if (store.defaultFlags !== text) {
-                  store.defaultFlags = text
-                  store.save()
+                PanelSectionHeader {
+                  width: parent.width
+                  text: "UI elements"
                 }
-              }
-              Connections {
-                target: store
-                function onDefaultFlagsChanged() {
-                  if (defaultFlagsField.text !== store.defaultFlags)
-                    defaultFlagsField.text = store.defaultFlags
+
+                Toggle {
+                  id: showOToggle
+                  width: parent.width
+                  label: "Omarchy island"
+                  description: "Show the O button that opens the Omarchy menu"
+                  checked: root.draftShowO
+                  hasCursor: root.settingsIndex === 0
+                  onHovered: function(h) { if (h) root.settingsIndex = 0 }
+                  onClicked: root.draftShowO = !root.draftShowO
+                }
+
+                Toggle {
+                  id: showAppsToggle
+                  width: parent.width
+                  label: "Apps island"
+                  description: "Show the APPS search button"
+                  checked: root.draftShowApps
+                  hasCursor: root.settingsIndex === 1
+                  onHovered: function(h) { if (h) root.settingsIndex = 1 }
+                  onClicked: root.draftShowApps = !root.draftShowApps
+                }
+
+                Toggle {
+                  id: showFilesToggle
+                  width: parent.width
+                  label: "Files island"
+                  description: "Show the FILES search button"
+                  checked: root.draftShowFiles
+                  hasCursor: root.settingsIndex === 2
+                  onHovered: function(h) { if (h) root.settingsIndex = 2 }
+                  onClicked: root.draftShowFiles = !root.draftShowFiles
+                }
+
+                PanelSeparator {
+                  width: parent.width
+                }
+
+                Dropdown {
+                  id: defaultModeDropdown
+                  width: parent.width
+                  label: "Default search mode"
+                  options: [
+                    { value: "auto", label: "Auto" },
+                    { value: "apps", label: "Apps" },
+                    { value: "files", label: "Files" }
+                  ]
+                  value: root.draftDefaultMode
+                  hasCursor: root.settingsIndex === 3
+                  onHovered: function(h) { if (h) root.settingsIndex = 3 }
+                  onChanged: root.draftDefaultMode = value
+                }
+
+                Toggle {
+                  id: showHiddenToggle
+                  width: parent.width
+                  label: "Show hidden by default"
+                  description: "Include dotfiles in file and directory searches"
+                  checked: root.draftShowHidden
+                  hasCursor: root.settingsIndex === 4
+                  onHovered: function(h) { if (h) root.settingsIndex = 4 }
+                  onClicked: root.draftShowHidden = !root.draftShowHidden
+                }
+
+                TextField {
+                  id: defaultFlagsField
+                  width: parent.width
+                  placeholderText: "Flags prefilled on open  e.g. -g -. -p"
+                  onTextChanged: {
+                    // Guarded: never echo an external set back into the draft,
+                    // so the caret is not yanked around while typing.
+                    if (root.draftDefaultFlags !== text)
+                      root.draftDefaultFlags = text
+                  }
+                  Connections {
+                    target: root
+                    function onDraftDefaultFlagsChanged() {
+                      if (defaultFlagsField.text !== root.draftDefaultFlags && !defaultFlagsField.activeFocus)
+                        defaultFlagsField.text = root.draftDefaultFlags
+                    }
+                  }
+                  Keys.onEscapePressed: function(event) {
+                    // First Esc drops out of the editor back to the settings
+                    // cursor (the panel's own Esc then closes settings).
+                    event.accepted = true
+                    settingsKeys.forceActiveFocus()
+                  }
+                }
+
+                Row {
+                  width: parent.width
+                  layoutDirection: Qt.RightToLeft
+                  spacing: Style.spacing.md
+                  Button {
+                    id: applyButton
+                    text: "Apply"
+                    selected: true
+                    hasCursor: root.settingsIndex === 7
+                    onHovered: function(h) { if (h) root.settingsIndex = 7 }
+                    onClicked: root.settingsApply()
+                  }
+                  Button {
+                    id: closeButton
+                    text: "Close"
+                    hasCursor: root.settingsIndex === 6
+                    onHovered: function(h) { if (h) root.settingsIndex = 6 }
+                    onClicked: root.exitSettings()
+                  }
                 }
               }
             }
