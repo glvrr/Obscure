@@ -182,6 +182,7 @@ Item {
       if (root.parsedMode === "sketchfab") return "Search Sketchfab for \u201C" + root.stripped + "\u201D"
       if (root.parsedMode === "youtube") return "Search YouTube for \u201C" + root.stripped + "\u201D"
       if (root.parsedMode === "ddg") return "Search DuckDuckGo for \u201C" + root.stripped + "\u201D"
+      if (root.parsedMode === "deviantart") return "Search DeviantArt for \u201C" + root.stripped + "\u201D"
       if (root.parsedMode === "run") return "Run: " + root.stripped
       if (root.parsedMode === "menu") return "Open Omarchy menu and search"
       if (root.parsedMode === "apps" && root.stripped !== "" && root.gridItems.length === 0)
@@ -691,7 +692,7 @@ Item {
   }
 
   // Flag tokens that fire an external action with the query, in typed order.
-  readonly property var requestModeMap: ({ g: "web", p: "pinterest", i: "images", "as": "artstation", "sf": "sketchfab", y: "youtube", ddg: "ddg", r: "run", o: "menu" })
+  readonly property var requestModeMap: ({ g: "web", p: "pinterest", i: "images", "as": "artstation", "sf": "sketchfab", y: "youtube", ddg: "ddg", da: "deviantart", r: "run", o: "menu" })
 
   // True when more than one dispatch-target flag is present ("-g -p cats").
   // Independent of chips/swallowed so the hint stays correct while typing.
@@ -701,7 +702,7 @@ Item {
   readonly property var requestLabelMap: ({
     web: "google", pinterest: "pinterest", images: "images",
     artstation: "artstation", sketchfab: "sketchfab", youtube: "youtube",
-    ddg: "ddg", run: "run", menu: "omarchy"
+    ddg: "ddg", deviantart: "deviantart", run: "run", menu: "omarchy"
   })
 
   function requestLabels() {
@@ -724,7 +725,8 @@ Item {
     artstation: Search.artstationUrl,
     sketchfab: Search.sketchfabUrl,
     youtube: Search.youtubeUrl,
-    ddg: Search.ddgUrl
+    ddg: Search.ddgUrl,
+    deviantart: Search.deviantartUrl
   })
 
   function webLaunch(mode, q) {
@@ -787,7 +789,8 @@ Item {
     case "artstation":
     case "sketchfab":
     case "youtube":
-    case "ddg": {
+    case "ddg":
+    case "deviantart": {
       if (!q) return
       root._opening = true
       root.webLaunch(mode, q)

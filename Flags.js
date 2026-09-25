@@ -13,19 +13,20 @@ const MODES = {
   "as": "artstation",
   "sf": "sketchfab",
   y: "youtube",
-  ddg: "ddg"
+  ddg: "ddg",
+  da: "deviantart"
 }
 
 // Object-literal prototypes expose broken "toString"/"constructor" keys, but
 // they are unreachable here: parseQuery only ever hands us one-letter tokens
-// or the explicit -as/-sf/-ddg words, none of which collide with object members.
-// (Verified loop this back into the parsed lookup with in/own checks — a
-// mode key can never be "toString"; the regex guarantees it.)
+// or the explicit -as/-sf/-ddg/-da words, none of which collide with object
+// members. (Verified loop this back into the parsed lookup with in/own checks
+// — a mode key can never be "toString"; the regex guarantees it.)
 
-// A leading flag token. Single letters plus the whole words -as/-sf/-ddg; the
-// alternation + backtracking keep unknown heads ("-af cats", "-ddu") as raw
-// text and prevent "-ddg" from being split into "-d" + raw "dg".
-const FLAG_RE = /^\s*-((?:ddg|as|sf|[a-z.]))(?:\s+|$)/
+// A leading flag token. Single letters plus the whole words -as/-sf/-ddg/-da;
+// the alternation + backtracking keep unknown heads ("-af cats", "-ddu") as
+// raw text and prevent "-ddg" from being split into "-d" + raw "dg".
+const FLAG_RE = /^\s*-((?:ddg|da|as|sf|[a-z.]))(?:\s+|$)/
 
 // Splits "text" into { mode, flag, query, hidden, flags }.
 // Leading `-x` tokens (x a known flag letter) select the mode, `-.` toggles
@@ -127,7 +128,8 @@ const CHIP_NAMES = {
   "artstation": "artstation",
   "sketchfab": "sketchfab",
   youtube: "youtube",
-  ddg: "ddg"
+  ddg: "ddg",
+  deviantart: "deviantart"
 }
 
 // Full-name labels for the confirmed leading flags, in typed order.

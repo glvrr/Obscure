@@ -83,10 +83,11 @@ TextField {
       case "sketchfab": return "Search Sketchfab..."
       case "youtube": return "Search YouTube..."
       case "ddg": return "Search DuckDuckGo..."
+      case "deviantart": return "Search DeviantArt..."
       }
     }
-    if (root.tabMode === "files") return "Search files...  (-f file  -d dir  -g web  -p pinterest  -i images  -as artstation  -sf sketchfab  -y youtube  -ddg duckduckgo  -r run  -. hidden)"
-    return "Search apps...  (-f file  -d dir  -g web  -p pinterest  -i images  -a apps  -o menu  -as artstation  -sf sketchfab  -y youtube  -ddg duckduckgo  -r run  -. hidden)"
+    if (root.tabMode === "files") return "Search files...  (-f file  -d dir  -g web  -p pinterest  -i images  -as artstation  -sf sketchfab  -y youtube  -ddg duckduckgo  -da deviantart  -r run  -. hidden)"
+    return "Search apps...  (-f file  -d dir  -g web  -p pinterest  -i images  -a apps  -o menu  -as artstation  -sf sketchfab  -y youtube  -ddg duckduckgo  -da deviantart  -r run  -. hidden)"
   }
 
   // ---- inline autocomplete ----

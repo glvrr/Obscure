@@ -37,3 +37,7 @@ function youtubeUrl(query) {
 function ddgUrl(query) {
   return "https://duckduckgo.com/?q=" + encodeURIComponent(String(query || ""))
 }
+
+function deviantartUrl(query) {
+  return "https://www.deviantart.com/search?q=" + encodeURIComponent(String(query || ""))
+}
