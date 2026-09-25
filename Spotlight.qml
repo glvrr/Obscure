@@ -167,10 +167,14 @@ Item {
   readonly property string hintText: {
     if (root.hasFlag) {
       // Multiple request flags dispatch together (runRequests); that beats the
-      // single-mode hint. The hidden chip is a view modifier, not a target.
-      var requestLabels = root.chips.filter(function(l) { return l !== "hidden" })
-      if (requestLabels.length > 1)
-        return "Multi-search: " + requestLabels.join(" + ")
+      // single-mode hint. Driven by requestModes() (the actual dispatch
+      // targets), NOT by chips/swallowed, so it works even with an empty
+      // query part where chips haven't formed yet. View flags (-f/-d/-a) are
+      // not dispatch targets and never make this "multi".
+      if (root.multiRequest) {
+        var mLabels = root.requestLabels()
+        if (mLabels.length > 0) return "Multi-search: " + mLabels.join(" + ")
+      }
       if (root.parsedMode === "web") return "Search Google for \u201C" + root.stripped + "\u201D"
       if (root.parsedMode === "pinterest") return "Search Pinterest for \u201C" + root.stripped + "\u201D"
       if (root.parsedMode === "images") return "Google Images for \u201C" + root.stripped + "\u201D"
@@ -689,6 +693,27 @@ Item {
   // Flag tokens that fire an external action with the query, in typed order.
   readonly property var requestModeMap: ({ g: "web", p: "pinterest", i: "images", "as": "artstation", "sf": "sketchfab", y: "youtube", ddg: "ddg", r: "run", o: "menu" })
 
+  // True when more than one dispatch-target flag is present ("-g -p cats").
+  // Independent of chips/swallowed so the hint stays correct while typing.
+  readonly property bool multiRequest: root.requestModes().length >= 2
+
+  // Mode -> short display label for the multi-search hint.
+  readonly property var requestLabelMap: ({
+    web: "google", pinterest: "pinterest", images: "images",
+    artstation: "artstation", sketchfab: "sketchfab", youtube: "youtube",
+    ddg: "ddg", run: "run", menu: "omarchy"
+  })
+
+  function requestLabels() {
+    var ms = root.requestModes()
+    var out = []
+    for (var i = 0; i < ms.length; i++) {
+      var l = root.requestLabelMap[ms[i]]
+      if (l && out.indexOf(l) < 0) out.push(l)
+    }
+    return out
+  }
+
   // Mode -> URL builder for every browser-dispatch mode. Used by BOTH the
   // single-mode runMode and the multi-flag runRequests so a new "-x" flag or
   // URL scheme only has to be registered here (mirror QueryBar.placeholderFor).
@@ -1083,6 +1108,7 @@ Item {
               gridActive: root.gridMode && root.gridEngaged
               filterActive: root.filterActive
               rawMode: root.parsedMode
+              multiRequest: root.multiRequest
               leftPadding: root.filterActive
                 ? queryField.defaultLeftPadding + chipRow.width + Style.spacing.xs + Style.spacing.sm
                 : queryField.defaultLeftPadding

@@ -17,6 +17,9 @@ TextField {
   // the chips, so parsing THIS field's text alone yields no flags.
   property bool filterActive: false
   property string rawMode: "auto"
+  // True when the parent sees multiple dispatch-target flags; the placeholder
+  // then advertises the combo instead of the first flag's label.
+  property bool multiRequest: false
   readonly property var parsed: Flags.parseQuery(root.text)
   readonly property string flag: root.parsed.flag
   readonly property string stripped: root.parsed.query
@@ -65,6 +68,7 @@ TextField {
   }
 
   function placeholderFor() {
+    if (root.multiRequest) return "Multi-search..."
     if (root.rawMode !== "auto") {
       switch (root.rawMode) {
       case "web": return "Search Google..."
