@@ -121,11 +121,13 @@ Item {
     if (la < lb) { var t = la; la = lb; lb = t }
     return (la + 0.05) / (lb + 0.05)
   }
-  function chipTextColor() {
+  // Theme-dependent but static for the whole session, so a read-only property
+  // (computed once at load) is enough.
+  readonly property color chipTextColor: (function() {
     var a = Color.accent
     var c1 = Color.menu.background, c2 = Color.menu.text
     return root.contrastOf(a, c1) >= root.contrastOf(a, c2) ? c1 : c2
-  }
+  })()
 
   // A flag wins over the tab; otherwise the tab decides.
   readonly property bool inApps: root.hasFlag
@@ -191,6 +193,10 @@ Item {
   // into the configured terminal (see open-file.sh).
   readonly property string openScript: String(Qt.resolvedUrl("open-file.sh")).replace(/^file:\/\//, "")
 
+  // Column count is a fixed layout choice (rows wrap until 3 are visible);
+  // the cells shrink with the panel width via cellWidth = width/gridCols, so
+  // the icons never clip. 6 gives a comfortable 2-row glance at 1/2 of apps
+  // on a 1080p panel.
   readonly property int gridCols: 6
   readonly property int gridVisibleRows: 3
 
@@ -243,7 +249,8 @@ Item {
         root.sortApps()
         if (root.allApps.length > 0) return
       } catch (e) {
-        appIndexReady = false
+        root.debugLog("ensureApps appLibrary threw: " + e)
+        root.appIndexReady = false
       }
     }
     if (!root.appIndexReady) {
@@ -661,6 +668,22 @@ Item {
   // Flag tokens that fire an external action with the query, in typed order.
   readonly property var requestModeMap: ({ g: "web", p: "pinterest", i: "images", "as": "artstation", "sf": "sketchfab", y: "youtube", r: "run", o: "menu" })
 
+  // Mode -> URL builder for every browser-dispatch mode. Used by BOTH the
+  // single-mode runMode and the multi-flag runRequests so a new "-x" flag or
+  // URL scheme only has to be registered here (mirror QueryBar.placeholderFor).
+  readonly property var urlBuilders: ({
+    web: Search.googleUrl,
+    pinterest: Search.pinterestUrl,
+    images: Search.imagesUrl,
+    artstation: Search.artstationUrl,
+    sketchfab: Search.sketchfabUrl,
+    youtube: Search.youtubeUrl
+  })
+
+  function webLaunch(mode, q) {
+    if (q) Quickshell.execDetached(["omarchy", "launch", "browser", root.urlBuilders[mode](q)])
+  }
+
   function requestModes() {
     var out = []
     var fl = root.parsed.flags || []
@@ -676,25 +699,11 @@ Item {
   function runRequests(modes, q) {
     root._opening = true
     for (var i = 0; i < modes.length; i++) {
+      if (root.urlBuilders[modes[i]]) {
+        root.webLaunch(modes[i], q)
+        continue
+      }
       switch (modes[i]) {
-      case "web":
-        if (q) Quickshell.execDetached(["omarchy", "launch", "browser", Search.googleUrl(q)])
-        break
-      case "pinterest":
-        if (q) Quickshell.execDetached(["omarchy", "launch", "browser", Search.pinterestUrl(q)])
-        break
-      case "images":
-        if (q) Quickshell.execDetached(["omarchy", "launch", "browser", Search.imagesUrl(q)])
-        break
-      case "artstation":
-        if (q) Quickshell.execDetached(["omarchy", "launch", "browser", Search.artstationUrl(q)])
-        break
-      case "sketchfab":
-        if (q) Quickshell.execDetached(["omarchy", "launch", "browser", Search.sketchfabUrl(q)])
-        break
-      case "youtube":
-        if (q) Quickshell.execDetached(["omarchy", "launch", "browser", Search.youtubeUrl(q)])
-        break
       case "run":
         if (q) Quickshell.execDetached(["bash", "-lc", q])
         break
@@ -725,45 +734,15 @@ Item {
       root.close()
       break
     }
-    case "web": {
-      if (!q) return
-      root._opening = true
-      Quickshell.execDetached(["omarchy", "launch", "browser", Search.googleUrl(q)])
-      root.close()
-      break
-    }
-    case "pinterest": {
-      if (!q) return
-      root._opening = true
-      Quickshell.execDetached(["omarchy", "launch", "browser", Search.pinterestUrl(q)])
-      root.close()
-      break
-    }
-    case "images": {
-      if (!q) return
-      root._opening = true
-      Quickshell.execDetached(["omarchy", "launch", "browser", Search.imagesUrl(q)])
-      root.close()
-      break
-    }
-    case "artstation": {
-      if (!q) return
-      root._opening = true
-      Quickshell.execDetached(["omarchy", "launch", "browser", Search.artstationUrl(q)])
-      root.close()
-      break
-    }
-    case "sketchfab": {
-      if (!q) return
-      root._opening = true
-      Quickshell.execDetached(["omarchy", "launch", "browser", Search.sketchfabUrl(q)])
-      root.close()
-      break
-    }
+    case "web":
+    case "pinterest":
+    case "images":
+    case "artstation":
+    case "sketchfab":
     case "youtube": {
       if (!q) return
       root._opening = true
-      Quickshell.execDetached(["omarchy", "launch", "browser", Search.youtubeUrl(q)])
+      root.webLaunch(mode, q)
       root.close()
       break
     }
@@ -1114,7 +1093,7 @@ Item {
                   radius: Math.max(2, Style.cornerRadius)
                   color: Color.accent
                   border.width: Math.max(1, Style.space(1))
-                  border.color: Util.alpha(root.chipTextColor(), 0.30)
+                  border.color: Util.alpha(root.chipTextColor, 0.30)
 
                   Text {
                     id: chipText
@@ -1127,7 +1106,7 @@ Item {
                     text: modelData
                     font.family: Style.font.family
                     font.pixelSize: Style.font.title
-                    color: root.chipTextColor()
+                    color: root.chipTextColor
                     verticalAlignment: Text.AlignVCenter
                     horizontalAlignment: Text.AlignHCenter
                   }

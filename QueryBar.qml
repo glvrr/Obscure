@@ -31,6 +31,8 @@ TextField {
   signal escapeKey()
 
   // Default content origin (text/caret column) before chip offset kicks in.
+  // Depends on the kit's private _borderSpec (Border.left); if the Ui kit ever
+  // changes that accessor this one needs the same update.
   readonly property int defaultLeftPadding: Math.round(root.horizontalPadding + Border.left(root._borderSpec))
 
   placeholderText: root.placeholderFor()
@@ -73,10 +75,13 @@ TextField {
       case "apps": return "Search apps..."
       case "pinterest": return "Search Pinterest..."
       case "images": return "Google Images..."
+      case "artstation": return "Search ArtStation..."
+      case "sketchfab": return "Search Sketchfab..."
+      case "youtube": return "Search YouTube..."
       }
     }
-    if (root.tabMode === "files") return "Search files...  (-f file  -d dir  -g web  -p pinterest  -i images  -r run  -. hidden)"
-    return "Search apps...  (-f file  -d dir  -g web  -p pinterest  -i images  -a apps  -o menu  -r run  -. hidden)"
+    if (root.tabMode === "files") return "Search files...  (-f file  -d dir  -g web  -p pinterest  -i images  -as artstation  -sf sketchfab  -y youtube  -r run  -. hidden)"
+    return "Search apps...  (-f file  -d dir  -g web  -p pinterest  -i images  -a apps  -o menu  -as artstation  -sf sketchfab  -y youtube  -r run  -. hidden)"
   }
 
   // ---- inline autocomplete ----

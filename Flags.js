@@ -15,6 +15,16 @@ const MODES = {
   y: "youtube"
 }
 
+// Object-literal prototypes expose broken "toString"/"constructor" keys, but
+// they are unreachable here: parseQuery only ever hands us one-letter tokens
+// or the explicit -as/-sf pair, none of which collide with object members.
+// (Verified loop this back into the parsed lookup with in/own checks — a
+// mode key can never be "toString"; the regex guarantees it.)
+
+// A leading flag token. Single letters plus the two-letter -as/-sf; the
+// alternation + backtracking keep "-af cats" and "-a ca..." as raw text.
+const FLAG_RE = /^\s*-((?:as|sf|[a-z.]))(?:\s+|$)/
+
 // Splits "text" into { mode, flag, query, hidden, flags }.
 // Leading `-x` tokens (x a known flag letter) select the mode, `-.` toggles
 // hidden files; both are stripped from the query. Anything else keeps "auto".
@@ -26,9 +36,8 @@ function parseQuery(text) {
   var flags = []
   var hidden = false
   var m
-  // Tokens are single letters plus the two-letter flags (-as/-sf); the
-  // alternation + backtracking keep "-af cats" and "-a ca..." as raw text.
-  var re = /^\s*-((?:as|sf|[a-z.]))(?:\s+|$)/
+  // See FLAG_RE above; it also drives chip/prefix alignment in prefix().
+  var re = FLAG_RE
   while ((m = re.exec(raw))) {
     var token = m[1]
     if (token === ".") {
@@ -85,7 +94,7 @@ function score(text, query) {
 function prefix(raw, parsed) {
   if (!parsed) parsed = parseQuery(raw)
   var s = String(raw || "")
-  var re = /^\s*-((?:as|sf|[a-z.]))(?:\s+|$)/
+  var re = FLAG_RE
   var n = 0
   var m
   while ((m = re.exec(s.slice(n)))) n += m[0].length
