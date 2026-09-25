@@ -83,7 +83,7 @@ Item {
 
   function applyFieldText(part) {
     if (root.filterActive) {
-      root.query = Flags.prefix(root.query, root.parsed) + part
+      root.query = Flags.prefix(root.query, Flags.parseQuery(root.query)) + part
     } else {
       root.query = part
     }
@@ -440,7 +440,7 @@ Item {
   function completeSuggestion() {
     if (root.suggestionText === "") return
     if (root.filterActive) {
-      root.query = Flags.prefix(root.query, root.parsed) + root.suggestionText
+      root.query = Flags.prefix(root.query, Flags.parseQuery(root.query)) + root.suggestionText
     } else {
       root.query = root.suggestionText
     }
