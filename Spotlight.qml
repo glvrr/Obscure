@@ -1138,14 +1138,13 @@ Item {
           height: root.contentHeight
           visible: root.contentHeight > 0
 
-          Column {
+          Item {
             id: settingsView
             visible: root.settingsOpen
             anchors.top: parent.top
             anchors.left: parent.left
             anchors.right: parent.right
             height: root.settingsPanelHeight
-            spacing: Style.spacing.sm
 
             // Keyboard-driven panel: this own the keys whenever settings are
             // open. The cursor (settingsIndex + hasCursor) walks the controls
