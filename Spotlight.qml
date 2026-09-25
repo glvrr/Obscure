@@ -756,7 +756,8 @@ Item {
     case "images":
     case "artstation":
     case "sketchfab":
-    case "youtube": {
+    case "youtube":
+    case "ddg": {
       if (!q) return
       root._opening = true
       root.webLaunch(mode, q)
