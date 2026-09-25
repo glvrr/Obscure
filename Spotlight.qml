@@ -172,6 +172,7 @@ Item {
       if (root.parsedMode === "artstation") return "Search ArtStation for \u201C" + root.stripped + "\u201D"
       if (root.parsedMode === "sketchfab") return "Search Sketchfab for \u201C" + root.stripped + "\u201D"
       if (root.parsedMode === "youtube") return "Search YouTube for \u201C" + root.stripped + "\u201D"
+      if (root.parsedMode === "ddg") return "Search DuckDuckGo for \u201C" + root.stripped + "\u201D"
       if (root.parsedMode === "run") return "Run: " + root.stripped
       if (root.parsedMode === "menu") return "Open Omarchy menu and search"
       if (root.parsedMode === "apps" && root.stripped !== "" && root.gridItems.length === 0)
@@ -681,7 +682,7 @@ Item {
   }
 
   // Flag tokens that fire an external action with the query, in typed order.
-  readonly property var requestModeMap: ({ g: "web", p: "pinterest", i: "images", "as": "artstation", "sf": "sketchfab", y: "youtube", r: "run", o: "menu" })
+  readonly property var requestModeMap: ({ g: "web", p: "pinterest", i: "images", "as": "artstation", "sf": "sketchfab", y: "youtube", ddg: "ddg", r: "run", o: "menu" })
 
   // Mode -> URL builder for every browser-dispatch mode. Used by BOTH the
   // single-mode runMode and the multi-flag runRequests so a new "-x" flag or
@@ -692,7 +693,8 @@ Item {
     images: Search.imagesUrl,
     artstation: Search.artstationUrl,
     sketchfab: Search.sketchfabUrl,
-    youtube: Search.youtubeUrl
+    youtube: Search.youtubeUrl,
+    ddg: Search.ddgUrl
   })
 
   function webLaunch(mode, q) {

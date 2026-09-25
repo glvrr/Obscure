@@ -33,3 +33,7 @@ function sketchfabUrl(query) {
 function youtubeUrl(query) {
   return "https://www.youtube.com/results?search_query=" + encodeURIComponent(String(query || ""))
 }
+
+function ddgUrl(query) {
+  return "https://duckduckgo.com/?q=" + encodeURIComponent(String(query || ""))
+}
