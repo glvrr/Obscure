@@ -78,10 +78,18 @@ function score(text, query) {
 }
 
 // Raw leading-flag prefix of "raw", i.e. everything parseQuery consumed before
-// the actual query (e.g. "-g " or "-. -p "), derived from the trimmed rest.
+// the actual query (e.g. "-g " or "-. -p "). Walked token-by-token instead of
+// derived from the length of the (trimmed) query so trailing separators like
+// "-p " keep the alignment: slicing by the trimmed length would leak the first
+// query character into the prefix ("-p cat " -> "-p c") and duplicate it.
 function prefix(raw, parsed) {
   if (!parsed) parsed = parseQuery(raw)
-  return String(raw || "").slice(0, String(raw || "").length - String(parsed.query).length)
+  var s = String(raw || "")
+  var re = /^\s*-((?:as|sf|[a-z.]))(?:\s+|$)/
+  var n = 0
+  var m
+  while ((m = re.exec(s.slice(n)))) n += m[0].length
+  return s.slice(0, n)
 }
 
 // A leading flag becomes a chip once it is followed by a separator space or
