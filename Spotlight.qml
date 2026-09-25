@@ -166,6 +166,11 @@ Item {
 
   readonly property string hintText: {
     if (root.hasFlag) {
+      // Multiple request flags dispatch together (runRequests); that beats the
+      // single-mode hint. The hidden chip is a view modifier, not a target.
+      var requestLabels = root.chips.filter(function(l) { return l !== "hidden" })
+      if (requestLabels.length > 1)
+        return "Multi-search: " + requestLabels.join(" + ")
       if (root.parsedMode === "web") return "Search Google for \u201C" + root.stripped + "\u201D"
       if (root.parsedMode === "pinterest") return "Search Pinterest for \u201C" + root.stripped + "\u201D"
       if (root.parsedMode === "images") return "Google Images for \u201C" + root.stripped + "\u201D"
