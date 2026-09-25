@@ -109,6 +109,21 @@ Item {
     queryField.cursorPosition = 0
   }
 
+  // Backspace on the chip column removes ONE flag (the most recently typed);
+  // only the last remaining flag falls back to removeFilter (clear all).
+  // The trailing space after the kept flags is mandatory or the leftover
+  // would glue into the text ("-gcats") and stop being a chip.
+  function popFilter() {
+    var p = Flags.prefix(root.query, root.parsed)
+    if (p.trim().split(/\s+/).length <= 1) {
+      root.removeFilter()
+      return
+    }
+    var m = p.match(/[ \t]*-[a-z.]+[ \t]*$/)
+    root.query = (m ? p.slice(0, m.index) + " " : "") + root.stripped
+    queryField.cursorPosition = 0
+  }
+
   // Chip colors stay theme-driven: the pill uses the accent and the label
   // text picks whichever of the two menu surfaces contrasts harder with it,
   // so both dark and light themes stay readable.
@@ -1070,7 +1085,7 @@ Item {
               onCycleMode: root.cycleMode(dir)
               onNavigateGrid: root.gridStep(dir)
               onHotkey: root.onHotkey(cmd)
-              onRemoveFilter: root.removeFilter()
+              onPopFilter: root.popFilter()
               onEscapeKey: {
                 if (root.settingsOpen) root.exitSettings()
                 else root.close()
