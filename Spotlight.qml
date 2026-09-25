@@ -71,6 +71,16 @@ Item {
   readonly property var chips: Flags.chipLabels(root.query, root.parsed)
   readonly property string visiblePart: root.filterActive ? root.stripped : root.query
 
+  // The query field is NOT bound to visiblePart: a live `text:` binding that
+  // re-sets the text on every keystroke (via the onTextEdited write-back)
+  // resets the field's internal edit state mid-input and duplicates the next
+  // committed character. Sync is therefore write-on-difference only: while the
+  // user types field.text == visiblePart, so nothing is pushed back in.
+  onVisiblePartChanged: {
+    if (queryField !== undefined && queryField.text !== root.visiblePart)
+      queryField.text = root.visiblePart
+  }
+
   function applyFieldText(part) {
     if (root.filterActive) {
       root.query = Flags.prefix(root.query, root.parsed) + part
@@ -338,6 +348,10 @@ Item {
     root.opened = true
     root.refreshResults()
     Qt.callLater(function() {
+      // The field outlives individual opens; make it show the fresh query
+      // before focusing (the onVisiblePartChanged sync also covers this, but
+      // the caret math below must run on the up-to-date text).
+      if (queryField.text !== root.visiblePart) queryField.text = root.visiblePart
       queryField.forceActiveFocus()
       // Prefilled default flags must stand: put the caret after them so the
       // first keystroke appends the query instead of replacing the flag.
@@ -986,12 +1000,11 @@ Item {
               gridActive: root.gridMode && root.gridEngaged
               filterActive: root.filterActive
               rawMode: root.parsedMode
-              text: root.visiblePart
               leftPadding: root.filterActive
                 ? queryField.defaultLeftPadding + chipRow.width + Style.spacing.xs + Style.spacing.sm
                 : queryField.defaultLeftPadding
               suggestion: root.suggestionText
-              onTextChanged: root.applyFieldText(queryField.text)
+              onTextEdited: root.applyFieldText(queryField.text)
               onActivate: root.activate()
               onTabComplete: root.completeSuggestion()
               onCycleMode: root.cycleMode(dir)
