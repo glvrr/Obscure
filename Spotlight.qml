@@ -476,10 +476,29 @@ Item {
     root.settingsIndex = 0
   }
 
+  // Vertical walk (Up/Down + j/k). The bottom buttons row is ONE vertical
+  // target: Down from the flags field enters it (landing on Apply), Down
+  // while inside is a no-op (nothing sits below and Down must never pick a
+  // button — switching Apply/Close is Left/Right only), Up leaves back to the
+  // field. Above the field the walk is bounded to 0..6, no wrap.
   function settingsMove(dir) {
+    if (root.settingsIndex > 6) {
+      if (dir < 0) root.settingsIndex = 6
+    } else {
+      var next = root.settingsIndex + dir
+      if (next > 6) root.settingsIndex = 7
+      else root.settingsIndex = Math.max(0, next)
+    }
+    if (root.tmpDebug) console.log("[settingsMove]", dir, "->", root.settingsIndex, "blocked:", defaultFlagsField.activeFocus, defaultModeDropdown.popupOpen)
+  }
+
+  // Tab/Shift+Tab still visit EVERY control including both buttons, so keyboard
+  // users can reach Close directly with the tab chain (vertical walk treats
+  // the row as a single unit).
+  function settingsTab(dir) {
     var n = 9 // toggles x4 + dropdown + hidden restore + animations + flags field + Apply + Close
     root.settingsIndex = (root.settingsIndex + dir + n) % n
-    if (root.tmpDebug) console.log("[settingsMove]", dir, "->", root.settingsIndex, "blocked:", defaultFlagsField.activeFocus, defaultModeDropdown.popupOpen)
+    if (root.tmpDebug) console.log("[settingsTab]", dir, "->", root.settingsIndex)
   }
 
   // TEMP diagnostics for the Apply-reachability investigation: remove after the
@@ -487,10 +506,15 @@ Item {
   readonly property bool tmpDebug: true
 
   // Left/Right (+ h/l) act on the control the cursor stands on: toggles flip,
-  // the mode dropdown steps Auto/Apps/Files, the flags field and the bottom
-  // buttons do nothing (the editor gets the caret arrows while focused).
+  // the mode dropdown steps Auto/Apps/Files, the bottom row switches between
+  // Apply/Close, the flags field does nothing (the editor gets the caret
+  // arrows while focused).
   function settingsHorizontal(dir) {
     if (dir === 0) return
+    if (root.settingsIndex >= 7) {
+      root.settingsIndex = root.settingsIndex === 7 ? 8 : 7
+      return
+    }
     if (root.settingsIndex === 3) {
       var opts = defaultModeDropdown.options
       if (opts.length === 0) return
@@ -1328,7 +1352,7 @@ Item {
                 if (dx !== 0) root.settingsHorizontal(dx)
                 else root.settingsMove(dy)
               }
-              onTabRequested: function(dir) { root.settingsMove(dir) }
+              onTabRequested: function(dir) { root.settingsTab(dir) }
               onActivateRequested: root.settingsActivate()
               onCloseRequested: root.exitSettings()
 
