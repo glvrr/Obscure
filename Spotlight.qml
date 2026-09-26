@@ -1479,6 +1479,22 @@ Item {
                     hasCursor: root.settingsIndex === 7
                     onHovered: function(h) { if (h) root.settingsIndex = 7 }
                     onClicked: root.settingsApply()
+
+                    // Apply is permanently emphasized via `selected`, whose
+                    // fill is STRONGER than the kit's hover-cursor fill — so
+                    // the cursor landing on it used to look like the highlight
+                    // vanished ("falls into empty space") and Close then made
+                    // both buttons read as lit. Give the cursor an explicit
+                    // accent ring so the walk target is always unambiguous.
+                    Rectangle {
+                      anchors.fill: parent
+                      visible: applyButton.hasCursor
+                      color: "transparent"
+                      border.color: Color.accent
+                      border.width: Math.max(1, Style.space(2))
+                      radius: Math.max(0, Style.cornerRadius - 1)
+                      Behavior on opacity { NumberAnimation { duration: root.animMs(120) } }
+                    }
                   }
                   Button {
                     id: closeButton
