@@ -413,23 +413,25 @@ Item {
     try { payload = JSON.parse(payloadJson || "{}") } catch (e) { payload = ({}) }
     root._opening = false
     var q = String(payload.query || "")
-    // Default search flags are prefilled on every open except the settings
-    // entry (right-click/CTRL+K), which keeps a clean line. Storage stays
-    // verbatim ("-p" or "-g "), but at open the flags get a single trailing
-    // separator so the very first keystroke appends the query ("-p cats",
-    // live chip) instead of glueing into the literal "-pcats".
-    var fl = store.ready && !payload.settings ? String(store.defaultFlags || "") : ""
+    // Summon routes: payload.tab picks the mode the card opens in —
+    // "apps" (grid), "files" (file list) or "auto" (empty line). An explicit
+    // route mirrors the system's `omarchy-menu toggle apps`: it must WIN over
+    // the default-flags prefill, otherwise a prefill like "-p " would break
+    // out of the requested mode into a Pinterest chip. Only the plain open
+    // (no tab) gets the default flags.
+    var route = String(payload.tab || "")
+    var fl = store.ready && !payload.settings && route === "" ? String(store.defaultFlags || "") : ""
     if (/\S/.test(fl)) {
       fl = fl.replace(/\s+$/, "") + " "
     } else {
       fl = ""
     }
+    if (route === "apps" && !store.showApps) route = ""
+    if (route === "files" && !store.showFiles) route = ""
     root.query = q === "" ? fl : fl + q
     root.headerPos = ""
     var def = store.ready ? store.defaultMode : ""
-    var wanted = payload.tab === "files" ? "files" : payload.tab === "apps" ? "apps" : ""
-    if (wanted === "apps" && !store.showApps) wanted = ""
-    if (wanted === "files" && !store.showFiles) wanted = ""
+    var wanted = route === "files" ? "files" : route === "apps" ? "apps" : ""
     if (def === "apps" && !store.showApps) def = ""
     if (def === "files" && !store.showFiles) def = ""
     root.activeTab = wanted === "" && (def === "apps" || def === "files") ? def : wanted
