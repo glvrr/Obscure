@@ -366,6 +366,17 @@ Item {
     return root.listHeight
   }
 
+  // Card height is animated through a single source of truth: both card.height
+  // AND the centering y read cardHeightAnim, so expanding and re-centering move
+  // together every frame. (Two chained Behaviors on height+y retarget y from
+  // the new target each frame and lag behind — the panel visibly shuffles to
+  // its new position only after it finished growing.)
+  readonly property int targetCardHeight: root.headerHeight + (root.contentHeight > 0 ? root.contentHeight + Style.spacing.sm : 0) + Style.spacing.md * 2
+  property real cardHeightAnim: root.targetCardHeight
+  Behavior on cardHeightAnim {
+    NumberAnimation { duration: root.animMs(200); easing.type: Easing.OutCubic }
+  }
+
   // Height of the settings panel: header + 3 island toggles + separator +
   // default-mode row + show-hidden toggle + flags field + buttons row. Kept
   // derived from the real content so adding/removing a row can't overflow the
@@ -994,16 +1005,14 @@ Item {
     BorderSurface {
       id: card
       width: Math.min(Style.space(620), window.width - Style.gapsOut * 2)
-      height: root.headerHeight + (root.contentHeight > 0 ? root.contentHeight + Style.spacing.sm : 0) + Style.spacing.md * 2
+      // Both dimensions derive from cardHeightAnim: the height animates and y
+      // re-centers from the SAME animated value, so growing and moving happen
+      // simultaneously (no chained behavior lag).
+      height: root.cardHeightAnim
       radius: Style.cornerRadius
       anchors.horizontalCenter: parent.horizontalCenter
-      y: Math.max(Style.gapsOut, Math.round((window.height - card.height) / 2))
+      y: Math.max(Style.gapsOut, Math.round((window.height - root.cardHeightAnim) / 2))
       color: root.cardColor
-      // Grow/shrink with content instead of snapping: the y binding keeps the
-      // card centered, so the top edge rises by half the delta and the bottom
-      // edge drops by half — a smooth "bed spread" (grid/settings appear).
-      Behavior on height { NumberAnimation { duration: root.animMs(200); easing.type: Easing.OutCubic } }
-      Behavior on y { NumberAnimation { duration: root.animMs(200); easing.type: Easing.OutCubic } }
       // The card carries the theme's popup border ([popups] border tokens, which
       // reference hyprland.active-border so the outline follows the theme and
       // Hyprland's active-window border like every other overlay plugin),
