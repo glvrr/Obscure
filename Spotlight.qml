@@ -62,6 +62,7 @@ Item {
   property bool draftShowFiles: true
   property string draftDefaultMode: "auto"
   property bool draftShowHidden: false
+  property bool draftAnimations: true
   property string draftDefaultFlags: ""
   // Keyboard cursor over the settings controls (see settingsKeys).
   property int settingsIndex: 0
@@ -135,6 +136,13 @@ Item {
     var la = root.relLum(a), lb = root.relLum(b)
     if (la < lb) { var t = la; la = lb; lb = t }
     return (la + 0.05) / (lb + 0.05)
+  }
+
+  // Master animation gate backed by the "Animations" settings toggle. When it
+  // is off every duration collapses to 0 so the whole UI reacts instantly.
+  readonly property bool animationsEnabled: store.animations
+  function animMs(ms) {
+    return root.animationsEnabled ? ms : 0
   }
   // Theme-dependent but static for the whole session, so a read-only property
   // (computed once at load) is enough.
@@ -428,12 +436,13 @@ Item {
     root.draftShowFiles = store.showFiles
     root.draftDefaultMode = store.defaultMode
     root.draftShowHidden = store.showHidden
+    root.draftAnimations = store.animations
     root.draftDefaultFlags = store.defaultFlags
     root.settingsIndex = 0
   }
 
   function settingsMove(dir) {
-    var n = 8 // toggles x3 + dropdown + hidden toggle + flags field + Close + Apply
+    var n = 9 // toggles x4 + dropdown + hidden restore + animations + flags field + Close + Apply
     root.settingsIndex = (root.settingsIndex + dir + n) % n
   }
 
@@ -444,12 +453,13 @@ Item {
     case 2: showFilesToggle.clicked(); break
     case 3: defaultModeDropdown.toggle(); break
     case 4: showHiddenToggle.clicked(); break
-    case 5:
+    case 5: animationsToggle.clicked(); break
+    case 6:
       defaultFlagsField.forceActiveFocus()
       defaultFlagsField.cursorPosition = defaultFlagsField.text.length
       break
-    case 6: root.exitSettings(); break
-    case 7: root.settingsApply(); break
+    case 7: root.exitSettings(); break
+    case 8: root.settingsApply(); break
     }
   }
 
@@ -460,6 +470,7 @@ Item {
     store.showFiles = root.draftShowFiles
     store.defaultMode = root.draftDefaultMode
     store.showHidden = root.draftShowHidden
+    store.animations = root.draftAnimations
     // Kept verbatim (no trim): "-g " must survive so the chip is live on the
     // next open, same rule as SettingsStore.apply().
     store.defaultFlags = root.draftDefaultFlags
@@ -988,6 +999,11 @@ Item {
       anchors.horizontalCenter: parent.horizontalCenter
       y: Math.max(Style.gapsOut, Math.round((window.height - card.height) / 2))
       color: root.cardColor
+      // Grow/shrink with content instead of snapping: the y binding keeps the
+      // card centered, so the top edge rises by half the delta and the bottom
+      // edge drops by half — a smooth "bed spread" (grid/settings appear).
+      Behavior on height { NumberAnimation { duration: root.animMs(200); easing.type: Easing.OutCubic } }
+      Behavior on y { NumberAnimation { duration: root.animMs(200); easing.type: Easing.OutCubic } }
       // The card carries the theme's popup border ([popups] border tokens, which
       // reference hyprland.active-border so the outline follows the theme and
       // Hyprland's active-window border like every other overlay plugin),
@@ -1048,7 +1064,7 @@ Item {
           anchors.right: parent.right
           height: root.headerHeight
           spacing: root.showTabs ? Style.spacing.lg : 0
-          Behavior on spacing { NumberAnimation { duration: 180; easing.type: Easing.InOutQuad } }
+          Behavior on spacing { NumberAnimation { duration: root.animMs(180); easing.type: Easing.InOutQuad } }
 
           // Header islands. Each icon is its own capsule; typing or a flag
           // collapses the whole cluster in width while the query line takes
@@ -1062,8 +1078,8 @@ Item {
             clip: true
             opacity: root.showTabs ? 1 : 0
             enabled: root.showTabs
-            Behavior on Layout.preferredWidth { NumberAnimation { duration: 180; easing.type: Easing.InOutQuad } }
-            Behavior on opacity { NumberAnimation { duration: 140; easing.type: Easing.OutQuad } }
+            Behavior on Layout.preferredWidth { NumberAnimation { duration: root.animMs(180); easing.type: Easing.InOutQuad } }
+            Behavior on opacity { NumberAnimation { duration: root.animMs(140); easing.type: Easing.OutQuad } }
 
             RowLayout {
               id: tabClusterRow
@@ -1286,6 +1302,17 @@ Item {
                   onClicked: root.draftShowHidden = !root.draftShowHidden
                 }
 
+                Toggle {
+                  id: animationsToggle
+                  width: parent.width
+                  label: "Animations"
+                  description: "Smooth panel resize, island collapse, fades and color shifts; off = instant response"
+                  checked: root.draftAnimations
+                  hasCursor: root.settingsIndex === 5
+                  onHovered: function(h) { if (h) root.settingsIndex = 5 }
+                  onClicked: root.draftAnimations = !root.draftAnimations
+                }
+
                 TextField {
                   id: defaultFlagsField
                   width: parent.width
@@ -1319,15 +1346,15 @@ Item {
                     id: applyButton
                     text: "Apply"
                     selected: true
-                    hasCursor: root.settingsIndex === 7
-                    onHovered: function(h) { if (h) root.settingsIndex = 7 }
+                    hasCursor: root.settingsIndex === 8
+                    onHovered: function(h) { if (h) root.settingsIndex = 8 }
                     onClicked: root.settingsApply()
                   }
                   Button {
                     id: closeButton
                     text: "Close"
-                    hasCursor: root.settingsIndex === 6
-                    onHovered: function(h) { if (h) root.settingsIndex = 6 }
+                    hasCursor: root.settingsIndex === 7
+                    onHovered: function(h) { if (h) root.settingsIndex = 7 }
                     onClicked: root.exitSettings()
                   }
                 }
@@ -1364,16 +1391,16 @@ Item {
             delegate: gridDelegate
 
             add: Transition {
-              NumberAnimation { properties: "opacity,scale"; from: 0; to: 1; duration: 150; easing.type: Easing.OutQuad }
+              NumberAnimation { properties: "opacity,scale"; from: 0; to: 1; duration: root.animMs(150); easing.type: Easing.OutQuad }
             }
             remove: Transition {
-              NumberAnimation { property: "opacity"; to: 0; duration: 120 }
+              NumberAnimation { property: "opacity"; to: 0; duration: root.animMs(120) }
             }
             displaced: Transition {
-              NumberAnimation { properties: "x,y"; duration: 160; easing.type: Easing.OutQuad }
+              NumberAnimation { properties: "x,y"; duration: root.animMs(160); easing.type: Easing.OutQuad }
             }
             populate: Transition {
-              NumberAnimation { properties: "opacity,scale"; from: 0; to: 1; duration: 220; easing.type: Easing.OutQuad }
+              NumberAnimation { properties: "opacity,scale"; from: 0; to: 1; duration: root.animMs(220); easing.type: Easing.OutQuad }
             }
           }
 
@@ -1486,7 +1513,7 @@ Item {
             height: Style.space(64)
             radius: Math.max(2, Style.cornerRadius)
             color: gridCell.isSelected ? Color.menu.selectedBackground : "transparent"
-            Behavior on color { ColorAnimation { duration: 120 } }
+            Behavior on color { ColorAnimation { duration: root.animMs(120) } }
           }
 
           Image {
@@ -1549,7 +1576,7 @@ Item {
         anchors.fill: parent
         radius: Math.max(2, Style.cornerRadius)
         color: rowItem.isSelected ? Color.menu.selectedBackground : "transparent"
-        Behavior on color { ColorAnimation { duration: 120 } }
+        Behavior on color { ColorAnimation { duration: root.animMs(120) } }
       }
 
       // App rows show the themed icon; files show a glyph.

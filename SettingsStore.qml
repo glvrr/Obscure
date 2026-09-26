@@ -19,6 +19,7 @@ Item {
   property bool showO: true
   property bool showApps: true
   property bool showFiles: true
+  property bool animations: true
   property string defaultFlags: ""
   property bool ready: false
 
@@ -45,6 +46,7 @@ Item {
     root.showO = o.showO === undefined ? true : !!o.showO
     root.showApps = o.showApps === undefined ? true : !!o.showApps
     root.showFiles = o.showFiles === undefined ? true : !!o.showFiles
+    root.animations = o.animations === undefined ? true : !!o.animations
     // Kept verbatim (no trim): "-g " with its trailing space must stay so the
     // chip is already active the moment the card reopens.
     root.defaultFlags = String(o.defaultFlags || "")
@@ -69,6 +71,7 @@ Item {
         showO: root.showO,
         showApps: root.showApps,
         showFiles: root.showFiles,
+        animations: root.animations,
         defaultFlags: root.defaultFlags
       }
       var file = root.configPath
