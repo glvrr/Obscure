@@ -477,9 +477,14 @@ Item {
   }
 
   function settingsMove(dir) {
-    var n = 9 // toggles x4 + dropdown + hidden restore + animations + flags field + Close + Apply
+    var n = 9 // toggles x4 + dropdown + hidden restore + animations + flags field + Apply + Close
     root.settingsIndex = (root.settingsIndex + dir + n) % n
+    if (TMP_DEBUG) console.log("[settingsMove]", dir, "->", root.settingsIndex, "blocked:", defaultFlagsField.activeFocus, defaultModeDropdown.popupOpen)
   }
+
+  // TEMP diagnostics for the Apply-reachability investigation: remove after the
+  // next successful live validation.
+  readonly property bool TMP_DEBUG: true
 
   // Left/Right (+ h/l) act on the control the cursor stands on: toggles flip,
   // the mode dropdown steps Auto/Apps/Files, the flags field and the bottom
@@ -517,8 +522,12 @@ Item {
       defaultFlagsField.forceActiveFocus()
       defaultFlagsField.cursorPosition = defaultFlagsField.text.length
       break
-    case 7: root.exitSettings(); break
-    case 8: root.settingsApply(); break
+    case 7:
+      console.log("[settings] activate Apply (index 7)")
+      root.settingsApply(); break
+    case 8:
+      console.log("[settings] activate Close (index 8)")
+      root.exitSettings(); break
     }
   }
 
@@ -1444,12 +1453,12 @@ Item {
                   Keys.onReturnPressed: function(event) {
                     event.accepted = true
                     settingsKeys.forceActiveFocus()
-                    root.settingsIndex = 8
+                    root.settingsIndex = 7
                   }
                   Keys.onEnterPressed: function(event) {
                     event.accepted = true
                     settingsKeys.forceActiveFocus()
-                    root.settingsIndex = 8
+                    root.settingsIndex = 7
                   }
                   Keys.onEscapePressed: function(event) {
                     // First Esc drops out of the editor back to the settings
@@ -1467,15 +1476,15 @@ Item {
                     id: applyButton
                     text: "Apply"
                     selected: true
-                    hasCursor: root.settingsIndex === 8
-                    onHovered: function(h) { if (h) root.settingsIndex = 8 }
+                    hasCursor: root.settingsIndex === 7
+                    onHovered: function(h) { if (h) root.settingsIndex = 7 }
                     onClicked: root.settingsApply()
                   }
                   Button {
                     id: closeButton
                     text: "Close"
-                    hasCursor: root.settingsIndex === 7
-                    onHovered: function(h) { if (h) root.settingsIndex = 7 }
+                    hasCursor: root.settingsIndex === 8
+                    onHovered: function(h) { if (h) root.settingsIndex = 8 }
                     onClicked: root.exitSettings()
                   }
                 }
