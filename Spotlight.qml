@@ -481,6 +481,30 @@ Item {
     root.settingsIndex = (root.settingsIndex + dir + n) % n
   }
 
+  // Left/Right (+ h/l) act on the control the cursor stands on: toggles flip,
+  // the mode dropdown steps Auto/Apps/Files, the flags field and the bottom
+  // buttons do nothing (the editor gets the caret arrows while focused).
+  function settingsHorizontal(dir) {
+    if (dir === 0) return
+    if (root.settingsIndex === 3) {
+      var opts = defaultModeDropdown.options
+      if (opts.length === 0) return
+      var idx = 0
+      for (var i = 0; i < opts.length; i++)
+        if (opts[i].value === root.draftDefaultMode) { idx = i; break }
+      root.draftDefaultMode = opts[(idx + dir + opts.length) % opts.length].value
+      return
+    }
+    // Toggle rows flip like Enter; anything else is a no-op for horizontal.
+    switch (root.settingsIndex) {
+    case 0: showOToggle.clicked(); break
+    case 1: showAppsToggle.clicked(); break
+    case 2: showFilesToggle.clicked(); break
+    case 4: showHiddenToggle.clicked(); break
+    case 5: animationsToggle.clicked(); break
+    }
+  }
+
   function settingsActivate() {
     switch (root.settingsIndex) {
     case 0: showOToggle.clicked(); break
@@ -1291,7 +1315,10 @@ Item {
               anchors.fill: parent
               focus: true
               blocked: defaultFlagsField.activeFocus || defaultModeDropdown.popupOpen
-              onMoveRequested: function(dx, dy) { root.settingsMove(dy) }
+              onMoveRequested: function(dx, dy) {
+                if (dx !== 0) root.settingsHorizontal(dx)
+                else root.settingsMove(dy)
+              }
               onTabRequested: function(dir) { root.settingsMove(dir) }
               onActivateRequested: root.settingsActivate()
               onCloseRequested: root.exitSettings()
@@ -1384,6 +1411,8 @@ Item {
                   id: defaultFlagsField
                   width: parent.width
                   placeholderText: "Flags prefilled on open  e.g. -g -. -p"
+                  hasCursor: root.settingsIndex === 6
+                  onHoveredChanged: if (defaultFlagsField.hovered) root.settingsIndex = 6
                   onTextChanged: {
                     // Guarded: never echo an external set back into the draft,
                     // so the caret is not yanked around while typing.
@@ -1396,6 +1425,31 @@ Item {
                       if (defaultFlagsField.text !== root.draftDefaultFlags && !defaultFlagsField.activeFocus)
                         defaultFlagsField.text = root.draftDefaultFlags
                     }
+                  }
+                  // The field owns the keys while focused (settingsKeys is
+                  // blocked); a single-line editor has no use for Up/Down so
+                  // they leave the editor and keep walking the settings
+                  // cursor. Enter commits the flags by jumping straight to
+                  // Apply; Esc just drops back out to the field's row.
+                  Keys.onDownPressed: function(event) {
+                    event.accepted = true
+                    settingsKeys.forceActiveFocus()
+                    root.settingsMove(1)
+                  }
+                  Keys.onUpPressed: function(event) {
+                    event.accepted = true
+                    settingsKeys.forceActiveFocus()
+                    root.settingsMove(-1)
+                  }
+                  Keys.onReturnPressed: function(event) {
+                    event.accepted = true
+                    settingsKeys.forceActiveFocus()
+                    root.settingsIndex = 8
+                  }
+                  Keys.onEnterPressed: function(event) {
+                    event.accepted = true
+                    settingsKeys.forceActiveFocus()
+                    root.settingsIndex = 8
                   }
                   Keys.onEscapePressed: function(event) {
                     // First Esc drops out of the editor back to the settings
