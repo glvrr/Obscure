@@ -1144,7 +1144,7 @@ Item {
 
   Timer {
     id: catEeTimer
-    interval: 2000
+    interval: 1500
     onTriggered: root.catVisible = false
   }
 
