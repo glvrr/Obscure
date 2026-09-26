@@ -479,12 +479,12 @@ Item {
   function settingsMove(dir) {
     var n = 9 // toggles x4 + dropdown + hidden restore + animations + flags field + Apply + Close
     root.settingsIndex = (root.settingsIndex + dir + n) % n
-    if (TMP_DEBUG) console.log("[settingsMove]", dir, "->", root.settingsIndex, "blocked:", defaultFlagsField.activeFocus, defaultModeDropdown.popupOpen)
+    if (root.tmpDebug) console.log("[settingsMove]", dir, "->", root.settingsIndex, "blocked:", defaultFlagsField.activeFocus, defaultModeDropdown.popupOpen)
   }
 
   // TEMP diagnostics for the Apply-reachability investigation: remove after the
   // next successful live validation.
-  readonly property bool TMP_DEBUG: true
+  readonly property bool tmpDebug: true
 
   // Left/Right (+ h/l) act on the control the cursor stands on: toggles flip,
   // the mode dropdown steps Auto/Apps/Files, the flags field and the bottom
