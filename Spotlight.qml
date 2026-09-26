@@ -1910,17 +1910,19 @@ Item {
     Item {
       required property var modelData
       width: helpList.width
-      height: modelData.kind === "banner" ? Style.space(54)
+      height: modelData.kind === "banner" ? Style.space(66)
         : modelData.kind === "header" ? Style.space(30)
         : root.helpRowH
 
       // Banner: plugin title on top, tagline below (help_exmpl.md layout).
+      // Generous bottom margin keeps a blank line between the tagline and the
+      // first section header so the page does not read as a stuck blob.
       Column {
         anchors.fill: parent
         anchors.leftMargin: Style.space(7)
         anchors.rightMargin: Style.space(7)
         anchors.topMargin: Style.space(8)
-        anchors.bottomMargin: Style.space(8)
+        anchors.bottomMargin: Style.space(20)
         visible: modelData.kind === "banner"
         spacing: Style.space(1)
 
