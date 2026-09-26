@@ -392,6 +392,7 @@ Item {
     // Settings/help views replace the search content entirely.
     if (root.settingsOpen) return root.settingsPanelHeight
     if (root.helpOpen) return root.helpPanelHeight
+    if (root.catVisible) return root.catPanelHeight
     // Auto mode with an empty query is just the line; the CTRL+S flash keeps
     // the hint slot open briefly even when there is nothing else to show.
     if (!root.searchMode && !root.inApps && !root.inFiles)
@@ -466,6 +467,15 @@ Item {
   // reached by scrolling (helpMove).
   readonly property int helpVisibleRows: Math.min(root.helpRows.length, 13)
 
+  // --- easter egg (unadvertised) ---
+  // A leading "-cat" phrase makes the lower part of the card spread open to
+  // show the ASCII cat for about a second, then collapse back. The art lives
+  // HERE (mirrored from an untracked local cat_ee.txt); runtime never reads a
+  // file. Deliberately absent from every help page, scheme and backlog doc.
+  property bool catVisible: false
+  property string catArt: "  /\\___/| C\\\n {>. o  )  ))\n  (=$==(  ))\n  ((__. _)}_"
+  readonly property int catPanelHeight: Style.space(80)
+
   // ---- host lifecycle ----
   function open(payloadJson) {
     var payload = ({})
@@ -522,6 +532,7 @@ Item {
     fileSearch.cancel()
     root.opened = false
     root.runPendingCmd = ""
+    root.catVisible = false
     root.selectedIndex = 0
     root.gridIndex = 0
   }
@@ -640,6 +651,18 @@ Item {
   function exitHelp() {
     if (!root.helpOpen) return
     root.helpOpen = false
+  }
+
+  // Easter egg trigger: a query that STARTS with the raw "-cat" token (it is
+  // not a real flag, so it can never collide) pops the cat panel open and
+  // re-arms its one-second timer; dropping the phrase collapses it at once.
+  function checkCat() {
+    if (root.query.match(/^\s*-cat(?:\s+|$)/)) {
+      root.catVisible = true
+      catEeTimer.restart()
+    } else if (root.catVisible) {
+      root.catVisible = false
+    }
   }
 
   // Fires a shell command with an optional Enter-twice gate. Returns true when
@@ -1080,6 +1103,7 @@ Item {
     if (root.helpOpen && root.query !== "") root.helpOpen = false
     // A different query invalidates any armed shell command.
     if (root.runPendingCmd !== "") root.runPendingCmd = ""
+    root.checkCat()
     root.refreshResults()
   }
   onActiveTabChanged: if (root.opened) root.refreshResults()
@@ -1116,6 +1140,12 @@ Item {
     id: flashTimer
     interval: 1600
     onTriggered: root.flashNote = ""
+  }
+
+  Timer {
+    id: catEeTimer
+    interval: 1000
+    onTriggered: root.catVisible = false
   }
 
   FileSearch {
@@ -1741,8 +1771,36 @@ Item {
             }
           }
 
+          Item {
+            id: catView
+            visible: root.catVisible
+            anchors.top: parent.top
+            anchors.left: parent.left
+            anchors.right: parent.right
+            height: root.catPanelHeight
+
+            Rectangle {
+              anchors.fill: parent
+              anchors.leftMargin: Style.space(8)
+              anchors.rightMargin: Style.space(8)
+              radius: Style.cornerRadius
+              color: Util.alpha(Color.menu.background, 0.55)
+              border.color: Util.alpha(Color.accent, 0.35)
+              border.width: Math.max(1, Style.spacing.hairline)
+
+              Text {
+                anchors.centerIn: parent
+                text: root.catArt
+                font.family: "monospace"
+                font.pixelSize: Style.font.body
+                color: root.fgColor
+                horizontalAlignment: Text.AlignHCenter
+              }
+            }
+          }
+
           Text {
-            visible: (root.showHint || root.flashActive) && !root.settingsOpen && !root.helpOpen
+            visible: (root.showHint || root.flashActive) && !root.settingsOpen && !root.helpOpen && !root.catVisible
             anchors.top: parent.top
             anchors.left: parent.left
             anchors.right: parent.right
@@ -1758,7 +1816,7 @@ Item {
 
           GridView {
             id: appGrid
-            visible: root.gridMode && !root.showHint && !root.settingsOpen && !root.helpOpen
+            visible: root.gridMode && !root.showHint && !root.settingsOpen && !root.helpOpen && !root.catVisible
             clip: true
             interactive: true
             boundsBehavior: Flickable.StopAtBounds
@@ -1785,7 +1843,7 @@ Item {
 
           Item {
             id: listColumn
-            visible: !root.gridMode && !root.showHint && !root.settingsOpen && !root.helpOpen
+            visible: !root.gridMode && !root.showHint && !root.settingsOpen && !root.helpOpen && !root.catVisible
             anchors.top: parent.top
             anchors.left: parent.left
             anchors.right: parent.right
