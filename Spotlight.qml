@@ -422,37 +422,44 @@ Item {
   // longer) + hint footer, all derived from real content.
   readonly property int helpPanelHeight: helpControlCol.implicitHeight
 
-  // Static help content shown by the [CTRL+H] page. kind: "header" renders a
-  // section title, "row" a label + right-aligned detail.
+  // Static help content shown by the [CTRL+H] page, mirroring help_exmpl.md.
+  // Row kinds: "banner" (plugin title + tagline), "header" (section title) or
+  // "row" ("[label]" followed by what it does).
   readonly property var helpRows: [
-    { kind: "header", label: "Hotkeys", detail: "" },
-    { kind: "row", label: "Ctrl+1", detail: "open Omarchy menu" },
-    { kind: "row", label: "Ctrl+2 / Ctrl+3", detail: "APPS / FILES search" },
-    { kind: "row", label: "Ctrl+4 / Ctrl+5 / Ctrl+6", detail: "Google / Pinterest / Images" },
-    { kind: "row", label: "Ctrl+0", detail: "run a shell command" },
-    { kind: "row", label: "Ctrl+F", detail: "FILES search" },
-    { kind: "row", label: "Ctrl+D", detail: "search directories" },
-    { kind: "row", label: "Ctrl+G / Ctrl+I / Ctrl+P", detail: "Google / Images / Pinterest flag" },
-    { kind: "row", label: "Ctrl+R", detail: "run flag" },
-    { kind: "row", label: "Ctrl+O", detail: "open Omarchy menu" },
-    { kind: "row", label: "Ctrl+K", detail: "settings" },
-    { kind: "row", label: "Ctrl+S", detail: "save current flags as default" },
-    { kind: "row", label: "Ctrl+H", detail: "this help" },
+    { kind: "banner", label: "Obscure", detail: "Hardly opinionated search-run bar." },
+    { kind: "header", label: "HotKeys", detail: "" },
+    { kind: "row", label: "CTRL+1", detail: "Omarchy menu" },
+    { kind: "row", label: "CTRL+2", detail: "Apps search" },
+    { kind: "row", label: "CTRL+3", detail: "Files search" },
+    { kind: "row", label: "CTRL+4", detail: "Google search" },
+    { kind: "row", label: "CTRL+5", detail: "Pinterest search" },
+    { kind: "row", label: "CTRL+6", detail: "Google Images search" },
+    { kind: "row", label: "CTRL+0", detail: "Run shell command" },
+    { kind: "row", label: "CTRL+F", detail: "Files search" },
+    { kind: "row", label: "CTRL+D", detail: "Directory search" },
+    { kind: "row", label: "CTRL+G", detail: "Google search" },
+    { kind: "row", label: "CTRL+P", detail: "Pinterest search" },
+    { kind: "row", label: "CTRL+I", detail: "Google Images search" },
+    { kind: "row", label: "CTRL+O", detail: "Omarchy menu" },
+    { kind: "row", label: "CTRL+R", detail: "Run shell command" },
+    { kind: "row", label: "CTRL+K", detail: "Settings menu" },
+    { kind: "row", label: "CTRL+S", detail: "Save current flags as default" },
+    { kind: "row", label: "CTRL+H", detail: "Help page" },
     { kind: "header", label: "Flags", detail: "" },
-    { kind: "row", label: "-f <name>", detail: "search files" },
-    { kind: "row", label: "-d <name>", detail: "search directories" },
-    { kind: "row", label: "-a <name>", detail: "search apps" },
-    { kind: "row", label: "-o <name>", detail: "search the Omarchy menu" },
-    { kind: "row", label: "-g / -p / -i", detail: "Google / Pinterest / Images" },
-    { kind: "row", label: "-as / -sf / -y", detail: "ArtStation / Sketchfab / YouTube" },
-    { kind: "row", label: "-ddg / -da", detail: "DuckDuckGo / DeviantArt" },
-    { kind: "row", label: "-r <command>", detail: "run in shell" },
-    { kind: "row", label: "-.", detail: "include hidden files" },
-    { kind: "row", label: "(no flag)", detail: "search apps, then files, then the web" },
-    { kind: "header", label: "In the list", detail: "" },
-    { kind: "row", label: "Enter", detail: "open the highlighted result" },
-    { kind: "row", label: "Arrows / j k", detail: "move the highlight" },
-    { kind: "row", label: "Esc", detail: "close (or leave settings / help)" }
+    { kind: "row", label: "-r <Query>", detail: "Run shell command" },
+    { kind: "row", label: "-f <Query>", detail: "Force file search" },
+    { kind: "row", label: "-d <Query>", detail: "Directory search" },
+    { kind: "row", label: "-a <Query>", detail: "App launcher" },
+    { kind: "row", label: "-o <Query>", detail: "Omarchy menu search" },
+    { kind: "row", label: "-g <Query>", detail: "Google search" },
+    { kind: "row", label: "-p <Query>", detail: "Pinterest search" },
+    { kind: "row", label: "-i <Query>", detail: "Google Images search" },
+    { kind: "row", label: "-as <Query>", detail: "ArtStation search" },
+    { kind: "row", label: "-sf <Query>", detail: "Sketchfab search" },
+    { kind: "row", label: "-y <Query>", detail: "YouTube search" },
+    { kind: "row", label: "-ddg <Query>", detail: "DuckDuckGo search" },
+    { kind: "row", label: "-da <Query>", detail: "DeviantArt search" },
+    { kind: "row", label: "-.", detail: "Show hidden results" }
   ]
   readonly property int helpRowH: Style.space(30)
   // Cap the visible list so the card never grows off-screen; the tail rows are
@@ -1903,34 +1910,88 @@ Item {
     Item {
       required property var modelData
       width: helpList.width
-      height: root.helpRowH
+      height: modelData.kind === "banner" ? Style.space(54)
+        : modelData.kind === "header" ? Style.space(30)
+        : root.helpRowH
 
+      // Banner: plugin title on top, tagline below (help_exmpl.md layout).
+      Column {
+        anchors.fill: parent
+        anchors.leftMargin: Style.space(7)
+        anchors.rightMargin: Style.space(7)
+        anchors.topMargin: Style.space(8)
+        anchors.bottomMargin: Style.space(8)
+        visible: modelData.kind === "banner"
+        spacing: Style.space(1)
+
+        Text {
+          width: parent.width
+          text: modelData.label
+          font.family: Style.font.family
+          font.pixelSize: Style.font.display
+          font.bold: true
+          color: Color.accent
+        }
+
+        Text {
+          width: parent.width
+          text: modelData.detail
+          font.family: Style.font.menuFamily
+          font.pixelSize: Style.font.caption
+          color: Util.alpha(root.dimColor, 0.85)
+          elide: Text.ElideRight
+        }
+      }
+
+      // Section header: HotKeys / Flags.
       Text {
         anchors.left: parent.left
         anchors.leftMargin: Style.space(7)
-        anchors.right: detailText.visible ? detailText.left : parent.right
-        anchors.rightMargin: Style.space(7)
-        anchors.verticalCenter: parent.verticalCenter
-        font.family: Style.font.family
-        font.pixelSize: modelData.kind === "header" ? Style.font.title + 2 : Style.font.title
-        font.bold: modelData.kind === "header"
-        color: modelData.kind === "header" ? Color.accent : root.fgColor
-        text: modelData.label
-        elide: Text.ElideRight
-        verticalAlignment: Text.AlignVCenter
-      }
-
-      Text {
-        id: detailText
         anchors.right: parent.right
         anchors.rightMargin: Style.space(7)
         anchors.verticalCenter: parent.verticalCenter
-        visible: modelData.detail !== ""
-        font.family: Style.font.menuFamily
-        font.pixelSize: Style.font.caption
-        color: Util.alpha(root.dimColor, 0.8)
-        elide: Text.ElideRight
+        visible: modelData.kind === "header"
+        font.family: Style.font.family
+        font.pixelSize: Style.font.subtitle
+        font.bold: true
+        color: Color.accent
+        text: modelData.label
         verticalAlignment: Text.AlignVCenter
+      }
+
+      // Row: "[label] - what it does", left-aligned.
+      RowLayout {
+        visible: modelData.kind === "row"
+        anchors.left: parent.left
+        anchors.leftMargin: Style.space(7)
+        anchors.right: parent.right
+        anchors.rightMargin: Style.space(7)
+        anchors.verticalCenter: parent.verticalCenter
+        spacing: Style.spacing.xs
+
+        Text {
+          text: "[" + modelData.label + "]"
+          font.family: Style.font.menuFamily
+          font.pixelSize: Style.font.title
+          color: root.fgColor
+        }
+
+        Text {
+          text: "-"
+          font.family: Style.font.menuFamily
+          font.pixelSize: Style.font.caption
+          color: Util.alpha(root.dimColor, 0.5)
+        }
+
+        Text {
+          Layout.fillWidth: true
+          text: modelData.detail
+          font.family: Style.font.menuFamily
+          font.pixelSize: Style.font.caption
+          color: Util.alpha(root.dimColor, 0.85)
+          elide: Text.ElideRight
+          verticalAlignment: Text.AlignVCenter
+        }
       }
     }
   }
