@@ -94,13 +94,20 @@ function score(text, query) {
 // derived from the length of the (trimmed) query so trailing separators like
 // "-p " keep the alignment: slicing by the trimmed length would leak the first
 // query character into the prefix ("-p cat " -> "-p c") and duplicate it.
+// Only REAL chip tokens (a known flag letter/word or "-.") are consumed: an
+// invalid head ("-s", "-ss", "-af") is query text and must stay in the editable
+// part. FLAG_RE would happily slurp a bare "-s" at the end of the string, which
+// used to hide it behind the chip row as invisible, uneditable text.
 function prefix(raw, parsed) {
   if (!parsed) parsed = parseQuery(raw)
   var s = String(raw || "")
   var re = FLAG_RE
   var n = 0
   var m
-  while ((m = re.exec(s.slice(n)))) n += m[0].length
+  while ((m = re.exec(s.slice(n)))) {
+    if (m[1] !== "." && !MODES[m[1]]) break
+    n += m[0].length
+  }
   return s.slice(0, n)
 }
 

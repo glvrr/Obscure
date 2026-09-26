@@ -31,6 +31,7 @@ TextField {
   signal navigateGrid(int dir)
   signal hotkey(string cmd)
   signal popFilter()
+  signal popRawToken()
   signal escapeKey()
 
   // Default content origin (text/caret column) before chip offset kicks in.
@@ -50,8 +51,12 @@ TextField {
     } else if ((event.modifiers & Qt.ControlModifier) && Flags.ctrlCommand(event.key, true) !== "") {
       root.hotkey(Flags.ctrlCommand(event.key, true))
       event.accepted = true
-    } else if (event.key === Qt.Key_Backspace && root.filterActive && root.cursorPosition === 0 && root.selectedText.length === 0) {
-      root.popFilter()
+    } else if (event.key === Qt.Key_Backspace && root.selectedText.length === 0 && root.cursorPosition === 0) {
+      if (root.filterActive) {
+        root.popFilter()
+      } else if (root.leadingToken() !== "") {
+        root.popRawToken()
+      }
       event.accepted = true
     } else if (root.text === "" && !root.filterActive && (event.key === Qt.Key_Left || event.key === Qt.Key_Right)) {
       var dir = event.key === Qt.Key_Right ? 1 : -1
@@ -65,6 +70,14 @@ TextField {
       root.tabComplete()
       event.accepted = true
     }
+  }
+
+  // The leading edge "-token" chunk of the field text while it is still raw
+  // (no chip filter). At caret position 0 Backspace removes it as a whole unit
+  // so a mis-typed flag ("-ss", "-s") can't strand as uneditable text.
+  function leadingToken() {
+    var m = root.text.match(/^\s*-[a-z.]+(?:[ \t]+|$)/)
+    return m ? m[0] : ""
   }
 
   function placeholderFor() {

@@ -125,6 +125,18 @@ Item {
     queryField.cursorPosition = 0
   }
 
+  // Backspace at caret 0 on a RAW (non-chip) leading "-token": removes it as a
+  // whole unit instead of stranding it. Only fires when filterActive is false
+  // (the field text then equals the whole query), so the token is the true
+  // leading edge of the string.
+  function popRawToken() {
+    var m = root.query.match(/^\s*-[a-z.]+(?:[ \t]+|$)/)
+    if (m) {
+      root.query = root.query.slice(m[0].length).replace(/^\s+/, "")
+      queryField.cursorPosition = 0
+    }
+  }
+
   // Chip colors stay theme-driven: the pill uses the accent and the label
   // text picks whichever of the two menu surfaces contrasts harder with it,
   // so both dark and light themes stay readable.
@@ -1152,6 +1164,7 @@ Item {
               onNavigateGrid: function(dir) { root.gridStep(dir) }
               onHotkey: function(cmd) { root.onHotkey(cmd) }
               onPopFilter: root.popFilter()
+             onPopRawToken: root.popRawToken()
               onEscapeKey: {
                 if (root.settingsOpen) root.exitSettings()
                 else root.close()
