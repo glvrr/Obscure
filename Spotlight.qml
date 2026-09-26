@@ -1013,6 +1013,10 @@ Item {
       anchors.horizontalCenter: parent.horizontalCenter
       y: Math.max(Style.gapsOut, Math.round((window.height - root.cardHeightAnim) / 2))
       color: root.cardColor
+      // Children (grid/list/settings) lay out at their full target height but
+      // must not paint while the card is still growing: clip reveals them as
+      // the border spreads instead of drawing the content full-size first.
+      clip: true
       // The card carries the theme's popup border ([popups] border tokens, which
       // reference hyprland.active-border so the outline follows the theme and
       // Hyprland's active-window border like every other overlay plugin),
