@@ -62,13 +62,13 @@ function parseQuery(text) {
 // Ctrl-key dispatch for in-card hotkeys (Qt key codes == ASCII). Returns a
 // command token for the spotlight or "" when the combo is not a hotkey.
 // Digits: 1 menu, 2 apps, 3 files, 4 g, 5 p, 6 i, 0 r.
-// Letters: D files-dir flag, F files, G g, I i, K settings, O menu, P p,
-// R r, S save the current flags as the default prefill.
+// Letters: D files-dir flag, F files, G g, H help, I i, K settings, O menu,
+// P p, R r, S save the current flags as the default prefill.
 function ctrlCommand(key, ctrl) {
   if (!ctrl) return ""
   var digits = { 49: "menu", 50: "apps", 51: "files", 52: "g", 53: "p", 54: "i", 48: "r" }
   if (digits[key]) return digits[key]
-  var letters = { 68: "d", 70: "files", 71: "g", 73: "i", 75: "settings", 79: "menu", 80: "p", 82: "r", 83: "saveflags" }
+  var letters = { 68: "d", 70: "files", 71: "g", 72: "help", 73: "i", 75: "settings", 79: "menu", 80: "p", 82: "r", 83: "saveflags" }
   return letters[key] || ""
 }
 

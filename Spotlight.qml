@@ -62,6 +62,15 @@ Item {
   // panel. Edits are staged in the settingsDraft group below: nothing touches
   // the store until Apply commits them, Close discards them.
   property bool settingsOpen: false
+  // Help view: opened via CTRL+H. Same content-area swap as settings, but
+  // read-only: Esc leaves it (card stays), Enter/typing/down-arrows dismiss
+  // it, Esc on 'omarchy' etc. do not run anything underneath.
+  property bool helpOpen: false
+  // When non-empty, a shell command was armed by the first Enter (flash shown,
+  // nothing run); the second Enter actually executes it. Cleared the moment
+  // the query changes, settings open or the card closes, so only the IDENTICAL
+  // follow-up Enter confirms. Empty = either confirm off or command already run.
+  property string runPendingCmd: ""
   // ---- settings draft (staged until Apply) ----
   property bool draftShowO: true
   property bool draftShowApps: true
@@ -69,6 +78,7 @@ Item {
   property string draftDefaultMode: "auto"
   property bool draftShowHidden: false
   property bool draftAnimations: true
+  property bool draftConfirmRun: true
   property string draftDefaultFlags: ""
   // Keyboard cursor over the settings controls (see settingsKeys).
   property int settingsIndex: 0
@@ -379,8 +389,9 @@ Item {
   readonly property int rowSpacing: Style.spacing.xs
   readonly property int listHeight: root.visibleRows > 0 ? root.visibleRows * root.rowHeight + (root.visibleRows - 1) * root.rowSpacing : 0
   readonly property int contentHeight: {
-    // Settings view replaces the search content entirely.
+    // Settings/help views replace the search content entirely.
     if (root.settingsOpen) return root.settingsPanelHeight
+    if (root.helpOpen) return root.helpPanelHeight
     // Auto mode with an empty query is just the line; the CTRL+S flash keeps
     // the hint slot open briefly even when there is nothing else to show.
     if (!root.searchMode && !root.inApps && !root.inFiles)
@@ -402,16 +413,58 @@ Item {
   }
 
   // Height of the settings panel: header + 3 island toggles + separator +
-  // default-mode row + show-hidden toggle + flags field + buttons row. Kept
-  // derived from the real content so adding/removing a row can't overflow the
-  // fixed-height card.
+  // default-mode row + show-hidden toggle + animations toggle + run-warning
+  // toggle + flags field + buttons row. Kept derived from the real content so
+  // adding/removing a row can't overflow the fixed-height card.
   readonly property int settingsPanelHeight: settingsControlCol.implicitHeight
+
+  // Height of the help view: section header + row list (capped, scrolls when
+  // longer) + hint footer, all derived from real content.
+  readonly property int helpPanelHeight: helpControlCol.implicitHeight
+
+  // Static help content shown by the [CTRL+H] page. kind: "header" renders a
+  // section title, "row" a label + right-aligned detail.
+  readonly property var helpRows: [
+    { kind: "header", label: "Hotkeys", detail: "" },
+    { kind: "row", label: "Ctrl+1", detail: "open Omarchy menu" },
+    { kind: "row", label: "Ctrl+2 / Ctrl+3", detail: "APPS / FILES search" },
+    { kind: "row", label: "Ctrl+4 / Ctrl+5 / Ctrl+6", detail: "Google / Pinterest / Images" },
+    { kind: "row", label: "Ctrl+0", detail: "run a shell command" },
+    { kind: "row", label: "Ctrl+F", detail: "FILES search" },
+    { kind: "row", label: "Ctrl+D", detail: "search directories" },
+    { kind: "row", label: "Ctrl+G / Ctrl+I / Ctrl+P", detail: "Google / Images / Pinterest flag" },
+    { kind: "row", label: "Ctrl+R", detail: "run flag" },
+    { kind: "row", label: "Ctrl+O", detail: "open Omarchy menu" },
+    { kind: "row", label: "Ctrl+K", detail: "settings" },
+    { kind: "row", label: "Ctrl+S", detail: "save current flags as default" },
+    { kind: "row", label: "Ctrl+H", detail: "this help" },
+    { kind: "header", label: "Flags", detail: "" },
+    { kind: "row", label: "-f <name>", detail: "search files" },
+    { kind: "row", label: "-d <name>", detail: "search directories" },
+    { kind: "row", label: "-a <name>", detail: "search apps" },
+    { kind: "row", label: "-o <name>", detail: "search the Omarchy menu" },
+    { kind: "row", label: "-g / -p / -i", detail: "Google / Pinterest / Images" },
+    { kind: "row", label: "-as / -sf / -y", detail: "ArtStation / Sketchfab / YouTube" },
+    { kind: "row", label: "-ddg / -da", detail: "DuckDuckGo / DeviantArt" },
+    { kind: "row", label: "-r <command>", detail: "run in shell" },
+    { kind: "row", label: "-.", detail: "include hidden files" },
+    { kind: "row", label: "(no flag)", detail: "search apps, then files, then the web" },
+    { kind: "header", label: "In the list", detail: "" },
+    { kind: "row", label: "Enter", detail: "open the highlighted result" },
+    { kind: "row", label: "Arrows / j k", detail: "move the highlight" },
+    { kind: "row", label: "Esc", detail: "close (or leave settings / help)" }
+  ]
+  readonly property int helpRowH: Style.space(30)
+  // Cap the visible list so the card never grows off-screen; the tail rows are
+  // reached by scrolling (helpMove).
+  readonly property int helpVisibleRows: Math.min(root.helpRows.length, 13)
 
   // ---- host lifecycle ----
   function open(payloadJson) {
     var payload = ({})
     try { payload = JSON.parse(payloadJson || "{}") } catch (e) { payload = ({}) }
     root._opening = false
+    root.runPendingCmd = ""
     var q = String(payload.query || "")
     // Summon routes: payload.tab picks the mode the card opens in —
     // "apps" (grid), "files" (file list) or "auto" (empty line). An explicit
@@ -436,6 +489,7 @@ Item {
     if (def === "files" && !store.showFiles) def = ""
     root.activeTab = wanted === "" && (def === "apps" || def === "files") ? def : wanted
     root.settingsOpen = !!payload.settings
+    root.helpOpen = false
     root.selectedIndex = 0
     root.gridIndex = 0
     root.disarmPointer()
@@ -460,6 +514,7 @@ Item {
   function close() {
     fileSearch.cancel()
     root.opened = false
+    root.runPendingCmd = ""
     root.selectedIndex = 0
     root.gridIndex = 0
   }
@@ -474,6 +529,7 @@ Item {
     root.draftDefaultMode = store.defaultMode
     root.draftShowHidden = store.showHidden
     root.draftAnimations = store.animations
+    root.draftConfirmRun = store.confirmRun
     root.draftDefaultFlags = store.defaultFlags
     root.settingsIndex = 0
   }
@@ -482,13 +538,13 @@ Item {
   // target: Down from the flags field enters it (landing on Apply), Down
   // while inside is a no-op (nothing sits below and Down must never pick a
   // button — switching Apply/Close is Left/Right only), Up leaves back to the
-  // field. Above the field the walk is bounded to 0..6, no wrap.
+  // field. Above the field the walk is bounded to 0..7, no wrap.
   function settingsMove(dir) {
-    if (root.settingsIndex > 6) {
-      if (dir < 0) root.settingsIndex = 6
+    if (root.settingsIndex > 7) {
+      if (dir < 0) root.settingsIndex = 7
     } else {
       var next = root.settingsIndex + dir
-      if (next > 6) root.settingsIndex = 7
+      if (next > 7) root.settingsIndex = 8
       else root.settingsIndex = Math.max(0, next)
     }
   }
@@ -497,7 +553,7 @@ Item {
   // users can reach Close directly with the tab chain (vertical walk treats
   // the row as a single unit).
   function settingsTab(dir) {
-    var n = 9 // toggles x4 + dropdown + hidden restore + animations + flags field + Apply + Close
+    var n = 10 // toggles x6 + dropdown + flags field + Apply + Close
     root.settingsIndex = (root.settingsIndex + dir + n) % n
   }
 
@@ -507,8 +563,8 @@ Item {
   // arrows while focused).
   function settingsHorizontal(dir) {
     if (dir === 0) return
-    if (root.settingsIndex >= 7) {
-      root.settingsIndex = root.settingsIndex === 7 ? 8 : 7
+    if (root.settingsIndex >= 8) {
+      root.settingsIndex = root.settingsIndex === 8 ? 9 : 8
       return
     }
     if (root.settingsIndex === 3) {
@@ -527,6 +583,7 @@ Item {
     case 2: showFilesToggle.clicked(); break
     case 4: showHiddenToggle.clicked(); break
     case 5: animationsToggle.clicked(); break
+    case 6: confirmRunToggle.clicked(); break
     }
   }
 
@@ -538,13 +595,14 @@ Item {
     case 3: defaultModeDropdown.toggle(); break
     case 4: showHiddenToggle.clicked(); break
     case 5: animationsToggle.clicked(); break
-    case 6:
+    case 6: confirmRunToggle.clicked(); break
+    case 7:
       defaultFlagsField.forceActiveFocus()
       defaultFlagsField.cursorPosition = defaultFlagsField.text.length
       break
-    case 7:
-      root.settingsApply(); break
     case 8:
+      root.settingsApply(); break
+    case 9:
       root.exitSettings(); break
     }
   }
@@ -557,6 +615,7 @@ Item {
     store.defaultMode = root.draftDefaultMode
     store.showHidden = root.draftShowHidden
     store.animations = root.draftAnimations
+    store.confirmRun = root.draftConfirmRun
     // Kept verbatim (no trim): "-g " must survive so the chip is live on the
     // next open, same rule as SettingsStore.apply().
     store.defaultFlags = root.draftDefaultFlags
@@ -567,6 +626,31 @@ Item {
   function exitSettings() {
     if (!root.settingsOpen) return
     root.settingsOpen = false
+  }
+
+  // Leave the help view; the card itself stays open (focus returns to the
+  // query line via onHelpOpenChanged).
+  function exitHelp() {
+    if (!root.helpOpen) return
+    root.helpOpen = false
+  }
+
+  // Fires a shell command with an optional Enter-twice gate. Returns true when
+  // the command was executed (the caller closes the card) and false when it
+  // was only ARMED (the caller must keep the card open and show the flash).
+  // The gate is `store.confirmRun`; an already-armed identical command skips
+  // straight to execution. Any edit to the query (onQueryChanged) or card
+  // close clears the arm, so the second Enter can never fire a stale command.
+  function runShell(q) {
+    if (store.confirmRun && root.runPendingCmd !== q) {
+      root.runPendingCmd = q
+      root.flashNote = "Run in shell? Press Enter again to confirm"
+      flashTimer.restart()
+      return false
+    }
+    root.runPendingCmd = ""
+    Quickshell.execDetached(["bash", "-lc", q])
+    return true
   }
 
   // CTRL+S: remember the current flag chips (or their absence) as the default
@@ -731,6 +815,11 @@ Item {
       root.settingsOpen = !root.settingsOpen
       return
     }
+    if (cmd === "help") {
+      // CTRL+H toggles the help view (see onHelpOpenChanged for focus).
+      root.helpOpen = !root.helpOpen
+      return
+    }
     if (cmd === "saveflags") {
       root.saveDefaultFlags()
       return
@@ -865,7 +954,18 @@ Item {
 
   // Execute several external actions at once (e.g. "-g -p cats" opens Google
   // and Pinterest). The card closes once after all of them are dispatched.
+  // When "-r" is among them the whole batch is gated: the first Enter only
+  // arms it (flash, card stays open) and NOTHING dispatches until the second
+  // Enter — a partial fire (web tabs opening first with the shell still
+  // pending) would leave half the request already gone.
   function runRequests(modes, q) {
+    if (modes.indexOf("run") >= 0 && store.confirmRun && root.runPendingCmd !== q) {
+      root.runPendingCmd = q
+      root.flashNote = "Run in shell? Press Enter again to confirm"
+      flashTimer.restart()
+      return
+    }
+    root.runPendingCmd = ""
     root._opening = true
     for (var i = 0; i < modes.length; i++) {
       if (root.urlBuilders[modes[i]]) {
@@ -919,8 +1019,10 @@ Item {
     }
     case "run": {
       if (!q) return
+      // First Enter with the confirm gate armed only shows the flash and keeps
+      // the card open; the identical second Enter (runShell below) executes.
+      if (!root.runShell(q)) return
       root._opening = true
-      Quickshell.execDetached(["bash", "-lc", q])
       root.close()
       break
     }
@@ -941,6 +1043,8 @@ Item {
   onOpenedChanged: if (root.opened) root.refreshResults()
   onSettingsOpenChanged: {
     if (root.settingsOpen) {
+      if (root.helpOpen) root.helpOpen = false
+      root.runPendingCmd = ""
       root.seedSettings()
       // Hands the panel the keyboard: the query line must NOT get focus while
       // settings are staged, or arrow keys would drive search instead of the
@@ -952,10 +1056,23 @@ Item {
       queryField.forceActiveFocus()
     }
   }
+  onHelpOpenChanged: {
+    if (root.helpOpen) {
+      if (root.settingsOpen) root.settingsOpen = false
+      root.runPendingCmd = ""
+      root.disarmPointer()
+      Qt.callLater(function() { helpKeys.forceActiveFocus() })
+    } else {
+      queryField.forceActiveFocus()
+    }
+  }
   onQueryChanged: {
     if (!root.opened) return
-    // Any typing leaves the settings view back to search.
+    // Any typing leaves the settings/help views back to search.
     if (root.settingsOpen && root.query !== "") root.settingsOpen = false
+    if (root.helpOpen && root.query !== "") root.helpOpen = false
+    // A different query invalidates any armed shell command.
+    if (root.runPendingCmd !== "") root.runPendingCmd = ""
     root.refreshResults()
   }
   onActiveTabChanged: if (root.opened) root.refreshResults()
@@ -1149,6 +1266,7 @@ Item {
         Keys.onPressed: function(event) {
           if (event.key === Qt.Key_Escape) {
             if (root.settingsOpen) root.exitSettings()
+            else if (root.helpOpen) root.exitHelp()
             else root.close()
             event.accepted = true
           } else if ((event.modifiers & Qt.ControlModifier) && Flags.ctrlCommand(event.key, true) !== "") {
@@ -1434,12 +1552,23 @@ Item {
                   onClicked: root.draftAnimations = !root.draftAnimations
                 }
 
+                Toggle {
+                  id: confirmRunToggle
+                  width: parent.width
+                  label: "Shell command warning"
+                  description: "Press Enter twice to run -r / Ctrl+0 commands instead of running them instantly"
+                  checked: root.draftConfirmRun
+                  hasCursor: root.settingsIndex === 6
+                  onHovered: function(h) { if (h) root.settingsIndex = 6 }
+                  onClicked: root.draftConfirmRun = !root.draftConfirmRun
+                }
+
                 TextField {
                   id: defaultFlagsField
                   width: parent.width
                   placeholderText: "Flags prefilled on open  e.g. -g -. -p"
-                  hasCursor: root.settingsIndex === 6
-                  onHoveredChanged: if (defaultFlagsField.hovered) root.settingsIndex = 6
+                  hasCursor: root.settingsIndex === 7
+                  onHoveredChanged: if (defaultFlagsField.hovered) root.settingsIndex = 7
                   onTextChanged: {
                     // Guarded: never echo an external set back into the draft,
                     // so the caret is not yanked around while typing.
@@ -1471,12 +1600,12 @@ Item {
                   Keys.onReturnPressed: function(event) {
                     event.accepted = true
                     settingsKeys.forceActiveFocus()
-                    root.settingsIndex = 7
+                    root.settingsIndex = 8
                   }
                   Keys.onEnterPressed: function(event) {
                     event.accepted = true
                     settingsKeys.forceActiveFocus()
-                    root.settingsIndex = 7
+                    root.settingsIndex = 8
                   }
                   Keys.onEscapePressed: function(event) {
                     // First Esc drops out of the editor back to the settings
@@ -1494,8 +1623,8 @@ Item {
                     id: applyButton
                     text: "Apply"
                     selected: true
-                    hasCursor: root.settingsIndex === 7
-                    onHovered: function(h) { if (h) root.settingsIndex = 7 }
+                    hasCursor: root.settingsIndex === 8
+                    onHovered: function(h) { if (h) root.settingsIndex = 8 }
                     onClicked: root.settingsApply()
 
                     // Apply is permanently emphasized via `selected`, whose
@@ -1517,8 +1646,8 @@ Item {
                   Button {
                     id: closeButton
                     text: "Close"
-                    hasCursor: root.settingsIndex === 8
-                    onHovered: function(h) { if (h) root.settingsIndex = 8 }
+                    hasCursor: root.settingsIndex === 9
+                    onHovered: function(h) { if (h) root.settingsIndex = 9 }
                     onClicked: root.exitSettings()
                   }
                 }
@@ -1526,8 +1655,87 @@ Item {
             }
           }
 
+          Item {
+            id: helpView
+            visible: root.helpOpen
+            anchors.top: parent.top
+            anchors.left: parent.left
+            anchors.right: parent.right
+            height: root.helpPanelHeight
+
+            // Read-only help panel. Esc/Enter leave it (the card stays open);
+            // Up/Down/j/k scroll the capped list; ANY text key dismisses help
+            // and returns to the search line. It never dispatches the query
+            // underneath, so the query (even a pending -r) stays a draft.
+            PanelKeyCatcher {
+              id: helpKeys
+              anchors.fill: parent
+              focus: true
+              onCloseRequested: root.exitHelp()
+              onActivateRequested: root.exitHelp()
+              onMoveRequested: function(dx, dy) { if (dy !== 0) root.helpMove(dy) }
+              onTextKey: function(t) { root.exitHelp() }
+
+              Column {
+                id: helpControlCol
+                anchors.fill: parent
+                spacing: Style.spacing.xs
+
+                PanelSectionHeader {
+                  width: parent.width
+                  text: "Help"
+                }
+
+                Item {
+                  id: helpListHost
+                  width: parent.width
+                  height: root.helpVisibleRows * root.helpRowH
+                  clip: true
+
+                  ListView {
+                    id: helpList
+                    anchors.fill: parent
+                    clip: true
+                    boundsBehavior: Flickable.StopAtBounds
+                    model: root.helpRows
+                    currentIndex: 0
+                    delegate: helpDelegate
+                  }
+
+                  Rectangle {
+                    id: helpScrollbar
+                    anchors.right: parent.right
+                    anchors.rightMargin: Style.space(2)
+                    width: Style.spacing.hairline
+                    radius: width
+                    color: Util.alpha(root.dimColor, 0.55)
+                    visible: helpList.contentHeight > helpList.height + 1
+                    height: Math.max(Style.space(24),
+                      parent.height * Math.min(1, helpList.height / helpList.contentHeight))
+                    y: (parent.height - height) * Math.max(0, Math.min(1,
+                      helpList.contentHeight > helpList.height
+                        ? helpList.contentY / (helpList.contentHeight - helpList.height)
+                        : 0))
+                  }
+                }
+
+                Text {
+                  width: parent.width
+                  height: Style.space(26)
+                  text: "Esc closes help  -  arrows move  -  typing returns to the search"
+                  font.family: Style.font.menuFamily
+                  font.pixelSize: Style.font.caption
+                  color: Util.alpha(root.dimColor, 0.8)
+                  horizontalAlignment: Text.AlignHCenter
+                  verticalAlignment: Text.AlignVCenter
+                  elide: Text.ElideRight
+                }
+              }
+            }
+          }
+
           Text {
-            visible: (root.showHint || root.flashActive) && !root.settingsOpen
+            visible: (root.showHint || root.flashActive) && !root.settingsOpen && !root.helpOpen
             anchors.top: parent.top
             anchors.left: parent.left
             anchors.right: parent.right
@@ -1543,7 +1751,7 @@ Item {
 
           GridView {
             id: appGrid
-            visible: root.gridMode && !root.showHint && !root.settingsOpen
+            visible: root.gridMode && !root.showHint && !root.settingsOpen && !root.helpOpen
             clip: true
             interactive: true
             boundsBehavior: Flickable.StopAtBounds
@@ -1570,7 +1778,7 @@ Item {
 
           Item {
             id: listColumn
-            visible: !root.gridMode && !root.showHint && !root.settingsOpen
+            visible: !root.gridMode && !root.showHint && !root.settingsOpen && !root.helpOpen
             anchors.top: parent.top
             anchors.left: parent.left
             anchors.right: parent.right
@@ -1675,6 +1883,55 @@ Item {
       root.completeSuggestion()
     } else if ((event.key === Qt.Key_Return || event.key === Qt.Key_Enter) && !queryField.activeFocus) {
       root.activate()
+    }
+  }
+
+  // Scroll the (capped) help list: move the highlight and keep it in view.
+  function helpMove(dir) {
+    root.disarmPointer()
+    var n = root.helpRows.length
+    if (n === 0) return
+    var next = Math.max(0, Math.min(helpList.currentIndex + dir, n - 1))
+    helpList.currentIndex = next
+    helpList.positionViewAtIndex(next, ListView.Contain)
+  }
+
+  // ---- help page row ----
+  Component {
+    id: helpDelegate
+
+    Item {
+      required property var modelData
+      width: helpList.width
+      height: root.helpRowH
+
+      Text {
+        anchors.left: parent.left
+        anchors.leftMargin: Style.space(7)
+        anchors.right: detailText.visible ? detailText.left : parent.right
+        anchors.rightMargin: Style.space(7)
+        anchors.verticalCenter: parent.verticalCenter
+        font.family: Style.font.family
+        font.pixelSize: modelData.kind === "header" ? Style.font.title + 2 : Style.font.title
+        font.bold: modelData.kind === "header"
+        color: modelData.kind === "header" ? Color.accent : root.fgColor
+        text: modelData.label
+        elide: Text.ElideRight
+        verticalAlignment: Text.AlignVCenter
+      }
+
+      Text {
+        id: detailText
+        anchors.right: parent.right
+        anchors.rightMargin: Style.space(7)
+        anchors.verticalCenter: parent.verticalCenter
+        visible: modelData.detail !== ""
+        font.family: Style.font.menuFamily
+        font.pixelSize: Style.font.caption
+        color: Util.alpha(root.dimColor, 0.8)
+        elide: Text.ElideRight
+        verticalAlignment: Text.AlignVCenter
+      }
     }
   }
 

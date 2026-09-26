@@ -20,6 +20,10 @@ Item {
   property bool showApps: true
   property bool showFiles: true
   property bool animations: true
+  // Ask to press Enter a second time before running a shell command (-r /
+  // Ctrl+0); off = execute instantly. Default ON: silent shell execution is
+  // otherwise one keystroke away from a search typo.
+  property bool confirmRun: true
   property string defaultFlags: ""
   property bool ready: false
 
@@ -47,6 +51,7 @@ Item {
     root.showApps = o.showApps === undefined ? true : !!o.showApps
     root.showFiles = o.showFiles === undefined ? true : !!o.showFiles
     root.animations = o.animations === undefined ? true : !!o.animations
+    root.confirmRun = o.confirmRun === undefined ? true : !!o.confirmRun
     // Kept verbatim (no trim): "-g " with its trailing space must stay so the
     // chip is already active the moment the card reopens.
     root.defaultFlags = String(o.defaultFlags || "")
@@ -72,6 +77,7 @@ Item {
         showApps: root.showApps,
         showFiles: root.showFiles,
         animations: root.animations,
+        confirmRun: root.confirmRun,
         defaultFlags: root.defaultFlags
       }
       var file = root.configPath
