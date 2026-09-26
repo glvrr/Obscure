@@ -1135,9 +1135,9 @@ Item {
               onTextEdited: root.applyFieldText(queryField.text)
               onActivate: root.activate()
               onTabComplete: root.completeSuggestion()
-              onCycleMode: root.cycleMode(dir)
-              onNavigateGrid: root.gridStep(dir)
-              onHotkey: root.onHotkey(cmd)
+              onCycleMode: function(dir) { root.cycleMode(dir) }
+              onNavigateGrid: function(dir) { root.gridStep(dir) }
+              onHotkey: function(cmd) { root.onHotkey(cmd) }
               onPopFilter: root.popFilter()
               onEscapeKey: {
                 if (root.settingsOpen) root.exitSettings()
@@ -1288,7 +1288,7 @@ Item {
                   value: root.draftDefaultMode
                   hasCursor: root.settingsIndex === 3
                   onHovered: function(h) { if (h) root.settingsIndex = 3 }
-                  onChanged: root.draftDefaultMode = value
+                  onChanged: function(value) { root.draftDefaultMode = value }
                 }
 
                 Toggle {
