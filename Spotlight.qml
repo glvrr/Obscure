@@ -489,7 +489,6 @@ Item {
       if (next > 6) root.settingsIndex = 7
       else root.settingsIndex = Math.max(0, next)
     }
-    if (root.tmpDebug) console.log("[settingsMove]", dir, "->", root.settingsIndex, "blocked:", defaultFlagsField.activeFocus, defaultModeDropdown.popupOpen)
   }
 
   // Tab/Shift+Tab still visit EVERY control including both buttons, so keyboard
@@ -498,12 +497,7 @@ Item {
   function settingsTab(dir) {
     var n = 9 // toggles x4 + dropdown + hidden restore + animations + flags field + Apply + Close
     root.settingsIndex = (root.settingsIndex + dir + n) % n
-    if (root.tmpDebug) console.log("[settingsTab]", dir, "->", root.settingsIndex)
   }
-
-  // TEMP diagnostics for the Apply-reachability investigation: remove after the
-  // next successful live validation.
-  readonly property bool tmpDebug: true
 
   // Left/Right (+ h/l) act on the control the cursor stands on: toggles flip,
   // the mode dropdown steps Auto/Apps/Files, the bottom row switches between
@@ -547,10 +541,8 @@ Item {
       defaultFlagsField.cursorPosition = defaultFlagsField.text.length
       break
     case 7:
-      console.log("[settings] activate Apply (index 7)")
       root.settingsApply(); break
     case 8:
-      console.log("[settings] activate Close (index 8)")
       root.exitSettings(); break
     }
   }
