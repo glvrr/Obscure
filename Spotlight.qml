@@ -427,6 +427,21 @@ Item {
   // "row" ("[label]" followed by what it does).
   readonly property var helpRows: [
     { kind: "banner", label: "Obscure", detail: "Hardly opinionated search-run bar." },
+    { kind: "header", label: "Flags", detail: "" },
+    { kind: "row", label: "-r <Query>", detail: "Run shell command" },
+    { kind: "row", label: "-f <Query>", detail: "Force file search" },
+    { kind: "row", label: "-d <Query>", detail: "Directory search" },
+    { kind: "row", label: "-a <Query>", detail: "App launcher" },
+    { kind: "row", label: "-o <Query>", detail: "Omarchy menu search" },
+    { kind: "row", label: "-g <Query>", detail: "Google search" },
+    { kind: "row", label: "-p <Query>", detail: "Pinterest search" },
+    { kind: "row", label: "-i <Query>", detail: "Google Images search" },
+    { kind: "row", label: "-as <Query>", detail: "ArtStation search" },
+    { kind: "row", label: "-sf <Query>", detail: "Sketchfab search" },
+    { kind: "row", label: "-y <Query>", detail: "YouTube search" },
+    { kind: "row", label: "-ddg <Query>", detail: "DuckDuckGo search" },
+    { kind: "row", label: "-da <Query>", detail: "DeviantArt search" },
+    { kind: "row", label: "-.", detail: "Show hidden results" },
     { kind: "header", label: "HotKeys", detail: "" },
     { kind: "row", label: "CTRL+1", detail: "Omarchy menu" },
     { kind: "row", label: "CTRL+2", detail: "Apps search" },
@@ -444,22 +459,7 @@ Item {
     { kind: "row", label: "CTRL+R", detail: "Run shell command" },
     { kind: "row", label: "CTRL+K", detail: "Settings menu" },
     { kind: "row", label: "CTRL+S", detail: "Save current flags as default" },
-    { kind: "row", label: "CTRL+H", detail: "Help page" },
-    { kind: "header", label: "Flags", detail: "" },
-    { kind: "row", label: "-r <Query>", detail: "Run shell command" },
-    { kind: "row", label: "-f <Query>", detail: "Force file search" },
-    { kind: "row", label: "-d <Query>", detail: "Directory search" },
-    { kind: "row", label: "-a <Query>", detail: "App launcher" },
-    { kind: "row", label: "-o <Query>", detail: "Omarchy menu search" },
-    { kind: "row", label: "-g <Query>", detail: "Google search" },
-    { kind: "row", label: "-p <Query>", detail: "Pinterest search" },
-    { kind: "row", label: "-i <Query>", detail: "Google Images search" },
-    { kind: "row", label: "-as <Query>", detail: "ArtStation search" },
-    { kind: "row", label: "-sf <Query>", detail: "Sketchfab search" },
-    { kind: "row", label: "-y <Query>", detail: "YouTube search" },
-    { kind: "row", label: "-ddg <Query>", detail: "DuckDuckGo search" },
-    { kind: "row", label: "-da <Query>", detail: "DeviantArt search" },
-    { kind: "row", label: "-.", detail: "Show hidden results" }
+    { kind: "row", label: "CTRL+H", detail: "Help page" }
   ]
   readonly property int helpRowH: Style.space(30)
   // Cap the visible list so the card never grows off-screen; the tail rows are
