@@ -66,6 +66,10 @@ Item {
   property string draftDefaultFlags: ""
   // Keyboard cursor over the settings controls (see settingsKeys).
   property int settingsIndex: 0
+  // Transient confirmation shown in the hint line after CTRL+S saves the
+  // default flags; cleared by flashTimer.
+  property string flashNote: ""
+  readonly property bool flashActive: root.flashNote !== ""
 
   // ---- parsed query + mode resolution ----
   readonly property var parsed: Flags.parseQuery(root.query)
@@ -371,9 +375,11 @@ Item {
   readonly property int contentHeight: {
     // Settings view replaces the search content entirely.
     if (root.settingsOpen) return root.settingsPanelHeight
-    // Auto mode with an empty query is just the line.
-    if (!root.searchMode && !root.inApps && !root.inFiles) return 0
-    if (root.showHint) return Style.space(44)
+    // Auto mode with an empty query is just the line; the CTRL+S flash keeps
+    // the hint slot open briefly even when there is nothing else to show.
+    if (!root.searchMode && !root.inApps && !root.inFiles)
+      return root.flashActive ? Style.space(44) : 0
+    if (root.showHint || root.flashActive) return Style.space(44)
     if (root.gridMode) return root.gridHeight
     return root.listHeight
   }
@@ -506,6 +512,21 @@ Item {
     root.settingsOpen = false
   }
 
+  // CTRL+S: remember the current flag chips (or their absence) as the default
+  // prefill for future opens. The prefix only ever contains REAL chip tokens
+  // (Flags.prefix stops at the first non-flag), so a mis-typed "-p -s" saves
+  // exactly "-p". The draft is synced too, otherwise a later settings Apply
+  // would overwrite this with a stale draft. Stored trimmed: open() re-pads
+  // the single trailing space so the chip is live on the next summon.
+  function saveDefaultFlags() {
+    var p = Flags.prefix(root.query, root.parsed).trim()
+    store.defaultFlags = p
+    root.draftDefaultFlags = p
+    store.save()
+    root.flashNote = "Default flags saved: " + (p === "" ? "none" : p)
+    flashTimer.restart()
+  }
+
   function ping() { return "ok" }
 
   function refresh() {
@@ -628,8 +649,9 @@ Item {
   // CTRL+1 opens the standard omarchy menu, CTRL+2 forces the APPS tab,
   // CTRL+3/CTRL+F the FILES tab, CTRL+4/CTRL+G -g, CTRL+5/CTRL+P -p,
   // CTRL+6/CTRL+I -i, CTRL+0/CTRL+R -r, CTRL+D -d, CTRL+K toggles the
-  // settings view. The flag ones prefill the query line so Enter hands the
-  // typed query to the requested search.
+  // settings view, CTRL+S saves the current flags as the default prefill.
+  // The flag ones prefill the query line so Enter hands the typed query to
+  // the requested search.
   function onHotkey(cmd) {
     if (cmd === "menu") {
       root.openOmarchy()
@@ -647,6 +669,10 @@ Item {
       // CTRL+K toggles the settings view; the draft is seeded and the panel
       // gets keyboard focus from onSettingsOpenChanged.
       root.settingsOpen = !root.settingsOpen
+      return
+    }
+    if (cmd === "saveflags") {
+      root.saveDefaultFlags()
       return
     }
     root.query = "-" + cmd + " "
@@ -900,6 +926,12 @@ Item {
     interval: 90
     repeat: false
     onTriggered: root.runFileSearch()
+  }
+
+  Timer {
+    id: flashTimer
+    interval: 1600
+    onTriggered: root.flashNote = ""
   }
 
   FileSearch {
@@ -1389,12 +1421,12 @@ Item {
           }
 
           Text {
-            visible: root.showHint && !root.settingsOpen
+            visible: (root.showHint || root.flashActive) && !root.settingsOpen
             anchors.top: parent.top
             anchors.left: parent.left
             anchors.right: parent.right
             height: Style.space(48)
-            text: root.hintText
+            text: root.flashActive ? root.flashNote : root.hintText
             font.family: Style.font.menuFamily
             font.pixelSize: Style.font.title
             color: root.dimColor
