@@ -36,6 +36,12 @@ Item {
   property bool opened: false
   property int selectedIndex: 0 // list rows (FILES / flags / dropdown)
   property int gridIndex: 0     // APPS grid cell
+  // Reveal the selected list row, rolling the list along with keyboard
+  // arrows and pointer hovering. Hovering rows that are already visible is a
+  // no-op (Contain only scrolls when the row is off-screen).
+  onSelectedIndexChanged: {
+    if (root.selectedIndex >= 0) Qt.callLater(root.revealListSelection)
+  }
   property bool _activating: false
   // Latch set the moment a launch/open is dispatched. The card starts closing
   // instantly and the list reflows beneath the cursor, so the releasing half
@@ -590,6 +596,9 @@ Item {
         iconUrl: r.iconUrl || ""
       })
     }
+    // Fresh results must start with the selection in view (selectedIndex is
+    // already reset), otherwise a leftover contentY keeps showing old rows.
+    Qt.callLater(root.revealListSelection)
   }
 
   function runFileSearch() {
@@ -1462,7 +1471,7 @@ Item {
             }
           }
 
-          Column {
+          Item {
             id: listColumn
             visible: !root.gridMode && !root.showHint && !root.settingsOpen
             anchors.top: parent.top
@@ -1471,12 +1480,37 @@ Item {
             height: root.listHeight
 
             ListView {
+              id: resultList
               width: parent.width
               height: root.listHeight
               clip: true
+              boundsBehavior: Flickable.StopAtBounds
               spacing: root.rowSpacing
               model: resultsModel
               delegate: rowDelegate
+            }
+
+            // Thin scroll indicator on the right edge: shows the visible slice
+            // of the result list and follows wheel, drag and keyboard scroll.
+            // Pure QML, no QtQuick.Controls import. y/height are plain bindings
+            // on the list's content metrics (auto-tracks on every scroll tick).
+            Rectangle {
+              id: listScrollbar
+              anchors.right: parent.right
+              anchors.rightMargin: Style.space(2)
+              width: Style.spacing.hairline
+              radius: width
+              color: Util.alpha(root.dimColor, 0.55)
+              visible: resultList.contentHeight > resultList.height + 1
+              height: Math.max(Style.space(24),
+                parent.height * Math.min(1, resultList.height / resultList.contentHeight))
+              y: (parent.height - height) * Math.max(0, Math.min(1,
+                resultList.contentHeight > resultList.height
+                  ? resultList.contentY / (resultList.contentHeight - resultList.height)
+                  : 0))
+              Behavior on color { ColorAnimation { duration: root.animMs(120) } }
+              Behavior on height { NumberAnimation { duration: root.animMs(120) } }
+              Behavior on y { NumberAnimation { duration: root.animMs(120) } }
             }
           }
         }
@@ -1527,6 +1561,12 @@ Item {
     if (next === root.gridIndex) return
     root.gridIndex = Math.max(0, Math.min(next, root.gridItems.length - 1))
     appGrid.positionViewAtIndex(root.gridIndex, GridView.Contain)
+  }
+
+  function revealListSelection() {
+    if (resultList === undefined) return
+    if (root.rowsCount === 0) return
+    resultList.positionViewAtIndex(root.safeListIndex, ListView.Contain)
   }
 
   function listKeys(event) {
