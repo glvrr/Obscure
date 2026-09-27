@@ -4,8 +4,9 @@ import Quickshell.Io
 
 // Persistent settings for the Obscure launcher. Values live in
 // ~/.config/omarchy/obscure.json (kept out of the plugin checkout and the
-// package-owned shell.json). Read blocking at startup (FileView below); each
-// change calls save() which debounces a write through a short-lived Process.
+// package-owned shell.json). Read blocking at startup (FileView below), and
+// re-read on demand through load(); each change calls save() which debounces
+// a write through a short-lived Process.
 // Root is an invisible Item (not QtObject): Process must be a child of a
 // type with a default `data` property.
 Item {
@@ -42,14 +43,15 @@ Item {
     return "'" + String(s).replace(/'/g, "'\\''") + "'"
   }
 
+  // Re-read the file. file.reload() is what makes this work at runtime: on
+  // this host FileView's watchChanges never fires (QFileSystemWatcher stays
+  // quiet even when the file is rewritten), and text() hands back the
+  // construction-time snapshot until something asks for a re-read. reload()
+  // refreshes it asynchronously, so the fresh content shows up on the next
+  // call — the bar widget polls once a second, which keeps that invisible.
   function load() {
-    var t = file.text()
-    var hasReload = (typeof file.reload === "function")
-    if (hasReload) { try { file.reload() } catch (e) { console.log("[obscure-probe] reload threw: " + e) } }
-    var t2 = file.text()
-    var m = /"showBarIcon":(\w+)/.exec(t2 || "")
-    console.log("[obscure-probe] hasReload=" + hasReload + " sameText=" + (t === t2) + " len=" + (t2 ? t2.length : -1) + " fileSays=" + (m ? m[1] : "absent") + " propIs=" + root.showBarIcon)
-    root.apply(t2)
+    file.reload()
+    root.apply(file.text())
   }
 
   function apply(raw) {
@@ -116,7 +118,7 @@ Item {
     path: root.configPath
     blockLoading: true
     watchChanges: true
-    onFileChanged: { console.log("[obscure-probe] watcher fired"); root.load() }
+    onFileChanged: root.load()
   }
 
   Process {

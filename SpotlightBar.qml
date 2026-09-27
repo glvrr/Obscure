@@ -17,25 +17,23 @@ BarWidget {
 
   // Own store instance: the panel's copy lives in another component tree and
   // child ids are not reachable across trees, so the bar reads the same JSON
-  // itself. It is loaded blocking, which is what makes `visible` correct on
-  // the first frame (an async read would flash the icon and pull it a beat
-  // later), and watchChanges inside the store picks up Apply instantly.
+  // itself. The blocking read is what makes `visible` correct on the first
+  // frame — an async read would paint the icon and pull it a beat later.
   SettingsStore {
     id: barStore
   }
 
-  // ...but a QFileSystemWatcher cannot arm on a path that does not exist yet,
-  // and on a fresh install obscure.json only appears on the first Apply. A
-  // slow blocking re-read of a 200-byte file keeps the icon honest forever
-  // (no process, no other polling).
+  // ...and it has to notice Apply while the panel is open. FileView's
+  // watchChanges is dead on this host (QFileSystemWatcher never fires), so
+  // poll instead: load() asks for a re-read, the fresh text lands on the
+  // following tick, and a 180-byte file costs nothing once a second. The
+  // first paint is unaffected either way — the blocking load above already
+  // resolved `visible` before this timer ever fires.
   Timer {
-    interval: 4000
+    interval: 1000
     repeat: true
     running: true
-    onTriggered: {
-      console.log("[obscure-probe] bar timer tick, prop=" + barStore.showBarIcon)
-      barStore.load()
-    }
+    onTriggered: barStore.load()
   }
 
   WidgetButton {
