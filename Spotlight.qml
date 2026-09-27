@@ -1350,14 +1350,15 @@ Item {
       Item {
         id: keyCatcher
         anchors.fill: parent
-        // Same visual gutter on every edge. Inset top/bottom = spacing.md, and
-        // the header/list rows add ~8px of vertical slack, so the sides use the
-        // popup padding token to land on the same perceived distance from the
-        // islands and the query line.
+        // The card's inner gutter: ONE token on all four edges. It used to be
+        // popupPadding (14) on the sides against md (6) top/bottom, which read
+        // as a visibly wider horizontal padding; the sides now use the same md
+        // as the vertical edges. (Whatever air the header itself carries lives
+        // inside the header row, it is not card padding.)
         anchors.topMargin: Style.spacing.md
         anchors.bottomMargin: Style.spacing.md
-        anchors.leftMargin: Style.spacing.popupPadding
-        anchors.rightMargin: Style.spacing.popupPadding
+        anchors.leftMargin: Style.spacing.md
+        anchors.rightMargin: Style.spacing.md
 
         Keys.onPressed: function(event) {
           if (event.key === Qt.Key_Escape) {
