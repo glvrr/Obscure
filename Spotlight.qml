@@ -1366,6 +1366,13 @@ Item {
   function disarmPointer() { pointerGate.reset() }
 
   function selectFromRow(item, index, mouse) {
+    // The resend list is a keyboard dropdown: while it is up the highlight
+    // belongs to the arrows, and a click inserts that row directly. Hover
+    // selection would fight the keyboard here — the card's own appear/grow
+    // animation slides the rows under a stationary mouse, and each of those
+    // synthetic samples lands in the gate as a "real" move, so the highlight
+    // would end up wherever the cursor happens to be instead of on row 0.
+    if (root.historyOpen) return
     if (pointerGate.moved(item, mouse)) root.selectedIndex = index
   }
 
@@ -1561,7 +1568,15 @@ Item {
                 : queryField.defaultLeftPadding
               suggestion: root.suggestionText
               onTextEdited: root.applyFieldText(queryField.text)
-              onActivate: root.activate()
+              onActivate: {
+                // Enter lands HERE, not in the keyCatcher: a focused text
+                // field consumes Return/Enter and never lets them bubble. With
+                // the resend list up it must insert the highlighted entry —
+                // activating instead would run the empty query behind it (with
+                // a standing prefill: a browser tab).
+                if (root.historyOpen) root.insertHistory(root.safeListIndex)
+                else root.activate()
+              }
               onTabComplete: root.completeSuggestion()
               onCycleMode: function(dir) { root.cycleMode(dir) }
               onNavigateGrid: function(dir) { root.gridStep(dir) }
@@ -1569,7 +1584,11 @@ Item {
               onPopFilter: root.popFilter()
              onPopRawToken: root.popRawToken()
               onEscapeKey: {
-                if (root.settingsOpen) root.exitSettings()
+                // Same reason as onActivate: Esc is consumed by the focused
+                // field, so the resend list has to close itself here or the
+                // first Esc tears the whole card down.
+                if (root.historyOpen) root.closeHistory()
+                else if (root.settingsOpen) root.exitSettings()
                 else root.close()
               }
             }
@@ -2195,6 +2214,15 @@ Item {
     if (!root.historyEligible) return
     root.historyOpen = true
     root.selectedIndex = 0
+    // The list popping up (and the reveal scroll under it) fires a hover
+    // sample whose mapToItem delta looks like a real pointer move, which drags
+    // the highlight onto whatever row happens to sit under the mouse. Re-arm
+    // the gate once the reveal settled, the same way listKeys disarms it on
+    // every key: the keyboard highlight stays on row 0.
+    Qt.callLater(function() {
+      root.revealListSelection()
+      Qt.callLater(root.disarmPointer)
+    })
   }
 
   function closeHistory() {

@@ -132,18 +132,20 @@ Item {
   // and then pull it a frame later), and the panel wants its settings before
   // the first open rather than one open late.
   //
-  // watchChanges is left on as a bonus, but do not rely on it: on this host
-  // QFileSystemWatcher never fires, not even for our own writes, and text()
-  // serves the construction-time snapshot until reload() is called. Live
-  // updates therefore come from whoever polls (the bar widget, once a
-  // second). apply() is idempotent and never calls save(), so a re-read of
-  // the panel's own write is harmless.
+  // NO onFileChanged here, on purpose. QFileSystemWatcher is unreliable in
+  // BOTH directions on this host: it stays quiet for external writes, but it
+  // DOES fire for our own save() — and reload() is async, so the handler read
+  // the PRE-save text and re-applied it over the values just written (caught
+  // live: Apply set History 0, the watcher re-read the old file and put the
+  // in-memory limit back to 10, and the resend list was trimmed to nothing on
+  // the way). Live updates come from whoever polls (the bar widget, once a
+  // second) or from the next construction; the panel's own copy is only ever
+  // written by Apply.
   FileView {
     id: file
     path: root.configPath
     blockLoading: true
-    watchChanges: true
-    onFileChanged: root.load()
+    watchChanges: false
   }
 
   Process {

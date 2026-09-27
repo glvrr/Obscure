@@ -110,7 +110,10 @@ Item {
   // next restart; the trimmed list is written back so the file agrees.
   onLimitChanged: {
     if (!root.ready) return
-    if (!root.enabled) return
+    // Test `limit`, never `enabled`: this handler can run BEFORE the `enabled`
+    // binding is re-evaluated, so the derived flag still reads "on" here and
+    // limit 0 would trim the list to nothing and write that back.
+    if (root.limit <= 0) return
     if (root.entries.length > root.limit) {
       root.entries = root.entries.slice(0, root.limit)
       root.save()
@@ -133,17 +136,17 @@ Item {
     }
   }
 
-  // Read blocking: the list is only consulted when Down is pressed, and the
-  // first card paint must already know whether entries exist (otherwise the
-  // header islands would pop out a frame late). Same FileView caveats as
-  // SettingsStore: watchChanges never fires on this host, so load() reloads
-  // explicitly.
+  // Read blocking, ONCE, at startup: the list has to be known before the first
+  // Down is pressed. Deliberately NO onFileChanged reload here — our own
+  // atomic save trips the watcher, and FileView.reload() is async, so the
+  // handler would read the PRE-save text and clobber the entry that was just
+  // added (verified: "loaded n=3" right after adding a 4th). The file is only
+  // written by us, so the next shell start re-reads it.
   FileView {
     id: file
     path: root.historyPath
     blockLoading: true
-    watchChanges: true
-    onFileChanged: root.load()
+    watchChanges: false
   }
 
   Process {
