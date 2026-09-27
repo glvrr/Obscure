@@ -32,7 +32,11 @@ BarWidget {
     interval: 4000
     repeat: true
     running: true
-    onTriggered: barStore.load()
+    onTriggered: {
+      console.log("[obscure-probe] bar timer tick, before=" + barStore.showBarIcon + " ready=" + barStore.ready)
+      barStore.load()
+      console.log("[obscure-probe] bar timer after=" + barStore.showBarIcon)
+    }
   }
 
   WidgetButton {

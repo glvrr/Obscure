@@ -43,7 +43,9 @@ Item {
   }
 
   function load() {
-    root.apply(file.text())
+    var t = file.text()
+    console.log("[obscure-probe] load len=" + (t ? t.length : -1) + " hasShowBarIcon=" + (t ? t.indexOf("showBarIcon") >= 0 : "n/a"))
+    root.apply(t)
   }
 
   function apply(raw) {
@@ -110,7 +112,7 @@ Item {
     path: root.configPath
     blockLoading: true
     watchChanges: true
-    onFileChanged: root.load()
+    onFileChanged: { console.log("[obscure-probe] watcher fired"); root.load() }
   }
 
   Process {
