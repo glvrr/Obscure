@@ -39,7 +39,7 @@ BarWidget {
     id: button
     anchors.fill: parent
     bar: root.bar
-    text: ""
+    text: "\uf002"
     fontFamily: Style.font.menuFamily
     horizontalMargin: 7.5
     onPressed: function(mouseButton) {
@@ -47,7 +47,5 @@ BarWidget {
       var settings = mouseButton === Qt.RightButton ? '{"settings":true}' : "{}"
       root.bar.run("omarchy-shell shell toggle glvr.ninja.obscure '" + settings + "'")
     }
-  }
-}
   }
 }
