@@ -1321,7 +1321,9 @@ Item {
 
     BorderSurface {
       id: card
-      width: Math.min(Style.space(620), window.width - Style.gapsOut * 2)
+      // 624 = 2*md (the card gutter) + 612, and 612/6 = 102 exactly, so the
+      // app grid cells come out pixel-even with no leftover strip on the right.
+      width: Math.min(Style.space(624), window.width - Style.gapsOut * 2)
       // Both dimensions derive from cardHeightAnim: the height animates and y
       // re-centers from the SAME animated value, so growing and moving happen
       // simultaneously (no chained behavior lag).
