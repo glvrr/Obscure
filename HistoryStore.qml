@@ -36,14 +36,24 @@ Item {
     return "'" + String(s).replace(/'/g, "'\\''") + "'"
   }
 
+  // Read the stored list. Called once, from Component.onCompleted, and only we
+  // ever write this file — so the job is done by the FileView's BLOCKING
+  // construction read, which is already finished by the time a parent's
+  // Component.onCompleted runs.
+  //
+  // DO NOT call file.reload() before reading text(). On this host reload() is
+  // asynchronous and blanks the view first, so `reload(); text()` returns ""
+  // (verified live: the file held 3 entries, the store came up empty), and the
+  // "first run" seed below then overwrote a perfectly good file with []. The
+  // list stayed empty for the whole session — a false "Empty list" hint, no
+  // persistence, and every recorded query clobbering the stored entries.
   function load() {
-    file.reload()
     var raw = file.text()
     root.apply(raw)
     // The setting can already say "off" while a list sits on disk: an older
     // version left one behind, or the limit was lowered while the shell was
     // down. Honour the setting at startup, without waiting for the card to be
-    // opened.
+    // opened. Safe only because the read above is the real file.
     if (!root.enabled && root.entries.length > 0) {
       root.entries = []
       root.save()
