@@ -385,6 +385,11 @@ Item {
   readonly property color selColor: Color.menu.selectedText
 
   property int headerHeight: Math.max(Style.space(50), Style.spacing.controlHeight + Style.spacing.md * 2)
+  // Card gutter, the single source for the inner padding of the card: the
+  // vertical edges take md (6) and the sides take 6 + 14 = 20 — the sides are
+  // deliberately roomier than the top/bottom, which is what the layout wants.
+  readonly property int cardPadY: Style.spacing.md
+  readonly property int cardPadX: Style.spacing.md + Style.space(14)
   property int rowHeight: Style.space(50)
   property int maxVisible: 10
 
@@ -1321,8 +1326,9 @@ Item {
 
     BorderSurface {
       id: card
-      // 624 = 2*md (the card gutter) + 612, and 612/6 = 102 exactly, so the
-      // app grid cells come out pixel-even with no leftover strip on the right.
+      // Fixed card width (clamped on narrow screens). The inner content box is
+      // width - 2*cardPadX; the app grid divides THAT by gridCols, so any width
+      // change moves the cell size with it.
       width: Math.min(Style.space(624), window.width - Style.gapsOut * 2)
       // Both dimensions derive from cardHeightAnim: the height animates and y
       // re-centers from the SAME animated value, so growing and moving happen
@@ -1352,15 +1358,13 @@ Item {
       Item {
         id: keyCatcher
         anchors.fill: parent
-        // The card's inner gutter: ONE token on all four edges. It used to be
-        // popupPadding (14) on the sides against md (6) top/bottom, which read
-        // as a visibly wider horizontal padding; the sides now use the same md
-        // as the vertical edges. (Whatever air the header itself carries lives
-        // inside the header row, it is not card padding.)
-        anchors.topMargin: Style.spacing.md
-        anchors.bottomMargin: Style.spacing.md
-        anchors.leftMargin: Style.spacing.md
-        anchors.rightMargin: Style.spacing.md
+        // The card's inner gutter. cardPadX/cardPadY are the only place the
+        // card padding is defined; everything below (header, list, grid,
+        // settings, help) fills this box and inherits it.
+        anchors.topMargin: root.cardPadY
+        anchors.bottomMargin: root.cardPadY
+        anchors.leftMargin: root.cardPadX
+        anchors.rightMargin: root.cardPadX
 
         Keys.onPressed: function(event) {
           if (event.key === Qt.Key_Escape) {
