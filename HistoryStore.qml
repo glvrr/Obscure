@@ -24,6 +24,8 @@ Item {
   // the file on disk alone, so turning it back on restores the old list.
   property int limit: 10
   property bool ready: false
+  // Guards the one-time "the file does not exist yet" seed below.
+  property bool seeded: false
 
   readonly property string historyPath: Quickshell.env("HOME") + "/.local/state/obscure/history.json"
   readonly property bool enabled: root.limit > 0
@@ -36,7 +38,16 @@ Item {
 
   function load() {
     file.reload()
-    root.apply(file.text())
+    var raw = file.text()
+    root.apply(raw)
+    // First run: nothing has ever been written, and FileView warns on EVERY
+    // read of a missing path (twice per load, on top of the load itself).
+    // Write an empty list once so later shell starts are quiet. Only while the
+    // mechanism is on — at limit 0 the stored list stays untouched.
+    if (root.enabled && String(raw || "").trim() === "" && !root.seeded) {
+      root.seeded = true
+      root.save()
+    }
   }
 
   function apply(raw) {
