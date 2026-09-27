@@ -1817,6 +1817,7 @@ Item {
                   spacing: Style.spacing.rowPaddingX
 
                   Text {
+                    id: historyLabel
                     // Row titles elsewhere in this panel (Ui/Toggle) are
                     // bold + subtitle + foreground; match them exactly.
                     anchors.verticalCenter: parent.verticalCenter
@@ -1831,10 +1832,11 @@ Item {
 
                   TextField {
                     id: historyField
-                    // Six digits, measured in the field's own font (a theme or
-                    // font swap changes the advance) plus the kit's own
-                    // horizontal padding, so the box is always 6 characters.
-                    width: historyFieldMetrics.horizontalAdvance + Style.space(22)
+                    // Everything the label leaves, so the box runs to the
+                    // panel's right edge. NOT a TextMetrics probe: that copies
+                    // the kit font before it resolves and measured 0 here,
+                    // which collapsed the field to a sliver.
+                    width: Math.max(0, parent.width - historyLabel.implicitWidth - parent.spacing)
                     placeholderText: "10"
                     hasCursor: root.settingsIndex === 9
                     onHoveredChanged: if (historyField.hovered) root.settingsIndex = 9
@@ -1881,13 +1883,6 @@ Item {
                       event.accepted = true
                       settingsKeys.forceActiveFocus()
                     }
-                  }
-
-                  // Non-visual: the six-digit width probe for the field above.
-                  TextMetrics {
-                    id: historyFieldMetrics
-                    font: historyField.font
-                    text: "000000"
                   }
                 }
 
