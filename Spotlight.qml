@@ -592,7 +592,7 @@ Item {
   // users can reach Close directly with the tab chain (vertical walk treats
   // the row as a single unit).
   function settingsTab(dir) {
-    var n = 12 // toggles x6 + dropdowns x2 + flags field + Apply + Close
+    var n = 12 // toggles x7 + dropdowns x2 + flags field + Apply + Close
     root.settingsIndex = (root.settingsIndex + dir + n) % n
   }
 
