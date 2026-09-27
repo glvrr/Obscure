@@ -386,10 +386,10 @@ Item {
 
   property int headerHeight: Math.max(Style.space(50), Style.spacing.controlHeight + Style.spacing.md * 2)
   // Card gutter, the single source for the inner padding of the card: the
-  // vertical edges take md (6) and the sides take 12 — the sides are
+  // vertical edges take md (6) and the sides take 8 — the sides are
   // deliberately roomier than the top/bottom, which is what the layout wants.
   readonly property int cardPadY: Style.spacing.md
-  readonly property int cardPadX: Style.space(12)
+  readonly property int cardPadX: Style.space(8)
   property int rowHeight: Style.space(50)
   property int maxVisible: 10
 
