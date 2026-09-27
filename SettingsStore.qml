@@ -98,10 +98,14 @@ Item {
         defaultFlags: root.defaultFlags
       }
       var file = root.configPath
+      // Write to a sibling and rename: the bar polls this file every second,
+      // and a reader that lands between truncate and write would otherwise see
+      // an empty file and fall back to defaults (icon blinking back on).
+      var tmp = file + ".tmp"
       writeProc.command = ["sh", "-lc",
         "mkdir -p " + root.q(file.replace(/\/[^/]*$/, ""))
         + " && printf '%s\\n' " + root.q(JSON.stringify(o))
-        + " > " + root.q(file)]
+        + " > " + root.q(tmp) + " && mv " + root.q(tmp) + " " + root.q(file)]
       writeProc.running = true
     }
   }
@@ -110,9 +114,14 @@ Item {
   // construction instead of through a `cat` process: the bar widget needs
   // showBarIcon on its very first frame (an async read would paint the icon
   // and then pull it a frame later), and the panel wants its settings before
-  // the first open rather than one open late. watchChanges keeps every live
-  // instance in step with writes from anywhere — the panel's own save()
-  // included, which is harmless: apply() is idempotent and never calls save().
+  // the first open rather than one open late.
+  //
+  // watchChanges is left on as a bonus, but do not rely on it: on this host
+  // QFileSystemWatcher never fires, not even for our own writes, and text()
+  // serves the construction-time snapshot until reload() is called. Live
+  // updates therefore come from whoever polls (the bar widget, once a
+  // second). apply() is idempotent and never calls save(), so a re-read of
+  // the panel's own write is harmless.
   FileView {
     id: file
     path: root.configPath
