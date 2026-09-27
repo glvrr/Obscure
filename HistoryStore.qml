@@ -50,10 +50,13 @@ Item {
   function load() {
     var raw = file.text()
     root.apply(raw)
-    // The setting can already say "off" while a list sits on disk: an older
+    // Belt: the setting can say "off" while a list sits on disk (an older
     // version left one behind, or the limit was lowered while the shell was
-    // down. Honour the setting at startup, without waiting for the card to be
-    // opened. Safe only because the read above is the real file.
+    // down). On THIS host the panel's SettingsStore applies its config AFTER
+    // we load (measured: the store logs after the history load), so `limit` is
+    // still the default 10 here and the wipe actually arrives a moment later
+    // through the limit binding -> onLimitChanged. Kept as the direct path in
+    // case that order ever flips.
     if (!root.enabled && root.entries.length > 0) {
       root.entries = []
       root.save()
