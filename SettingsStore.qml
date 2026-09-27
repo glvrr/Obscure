@@ -44,8 +44,12 @@ Item {
 
   function load() {
     var t = file.text()
-    console.log("[obscure-probe] load len=" + (t ? t.length : -1) + " hasShowBarIcon=" + (t ? t.indexOf("showBarIcon") >= 0 : "n/a"))
-    root.apply(t)
+    var hasReload = (typeof file.reload === "function")
+    if (hasReload) { try { file.reload() } catch (e) { console.log("[obscure-probe] reload threw: " + e) } }
+    var t2 = file.text()
+    var m = /"showBarIcon":(\w+)/.exec(t2 || "")
+    console.log("[obscure-probe] hasReload=" + hasReload + " sameText=" + (t === t2) + " len=" + (t2 ? t2.length : -1) + " fileSays=" + (m ? m[1] : "absent") + " propIs=" + root.showBarIcon)
+    root.apply(t2)
   }
 
   function apply(raw) {

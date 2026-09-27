@@ -33,9 +33,8 @@ BarWidget {
     repeat: true
     running: true
     onTriggered: {
-      console.log("[obscure-probe] bar timer tick, before=" + barStore.showBarIcon + " ready=" + barStore.ready)
+      console.log("[obscure-probe] bar timer tick, prop=" + barStore.showBarIcon)
       barStore.load()
-      console.log("[obscure-probe] bar timer after=" + barStore.showBarIcon)
     }
   }
 
