@@ -199,7 +199,12 @@ Item {
 
   // Header islands (O / APPS / FILES) collapse away while typing or while a
   // flag is active; the query line grows to the full card width in sync.
-  readonly property bool showTabs: root.query === "" && !root.hasFlag
+  // The islands are also individually switchable, so the cluster may be EMPTY
+  // (every toggle off) while the query is still empty — that case must count
+  // as collapsed too, otherwise the cluster sits at width 0 and leaves its 8px
+  // RowLayout gap behind, which pushes the query line off-centre for good.
+  readonly property bool anyIslandVisible: store.showO || store.showApps || store.showFiles
+  readonly property bool showTabs: root.query === "" && !root.hasFlag && root.anyIslandVisible
 
   readonly property string listMode: root.inFiles ? "files" : ""
 
