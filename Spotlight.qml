@@ -756,6 +756,16 @@ Item {
     root.syncResults()
   }
 
+  // Both row sources are bindings that hand back a FRESH array on every
+  // re-evaluation, so watching them covers every path that swaps the content
+  // without touching the query line: switching to the APPS tab by click or
+  // CTRL+2, toggling the "Apps view" setting live, apps finishing their async
+  // index load. Without this, resultsModel kept the rows of the PREVIOUS mode
+  // (empty when coming from auto) and the apps-as-list screen rendered nothing
+  // until the first keystroke ran refreshResults().
+  onGridItemsChanged: root.syncGrid()
+  onDisplayRowsChanged: root.syncResults()
+
   function syncGrid() {
     gridModel.clear()
     var items = root.gridItems
@@ -771,6 +781,9 @@ Item {
   }
 
   function syncResults() {
+    root.debugLog("syncResults rows=" + root.displayRows.length
+      + " grid=" + root.gridItems.length
+      + " gridMode=" + root.gridMode + " appsList=" + root.appsListMode)
     resultsModel.clear()
     var rows = root.displayRows
     for (var i = 0; i < rows.length; i++) {
@@ -828,15 +841,20 @@ Item {
     queryField.forceActiveFocus()
   }
 
+  // Switching islands is a content change like any other: the row models are
+  // refilled by the displayRows/gridItems watchers, and the list selection
+  // starts from the top (the query line may hold no text at all).
   function setTab(mode) {
     root.gridEngaged = false
     root.activeTab = mode
+    root.selectedIndex = 0
     queryField.forceActiveFocus()
   }
 
   function toggleTab(mode) {
     root.gridEngaged = false
     root.activeTab = root.activeTab === mode ? "" : mode
+    root.selectedIndex = 0
     queryField.forceActiveFocus()
   }
 
