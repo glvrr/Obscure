@@ -40,6 +40,14 @@ Item {
     file.reload()
     var raw = file.text()
     root.apply(raw)
+    // The setting can already say "off" while a list sits on disk: an older
+    // version left one behind, or the limit was lowered while the shell was
+    // down. Honour the setting at startup, without waiting for the card to be
+    // opened.
+    if (!root.enabled && root.entries.length > 0) {
+      root.entries = []
+      root.save()
+    }
     // First run: nothing has ever been written, and FileView warns on EVERY
     // read of a missing path (twice per load, on top of the load itself).
     // Write an empty list once so later shell starts are quiet. Only while the
@@ -108,12 +116,19 @@ Item {
 
   // A limit lowered in the settings panel must bite at once, not after the
   // next restart; the trimmed list is written back so the file agrees.
+  // 0 is not a pause, it is an off switch that ERASES: the user asked for the
+  // stored history to go with it, so switching it back on starts empty.
   onLimitChanged: {
     if (!root.ready) return
     // Test `limit`, never `enabled`: this handler can run BEFORE the `enabled`
-    // binding is re-evaluated, so the derived flag still reads "on" here and
-    // limit 0 would trim the list to nothing and write that back.
-    if (root.limit <= 0) return
+    // binding is re-evaluated, so the derived flag still reads "on" here.
+    if (root.limit <= 0) {
+      if (root.entries.length > 0) {
+        root.entries = []
+        root.save()
+      }
+      return
+    }
     if (root.entries.length > root.limit) {
       root.entries = root.entries.slice(0, root.limit)
       root.save()

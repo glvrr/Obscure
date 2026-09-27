@@ -223,6 +223,9 @@ Item {
 
   readonly property string hintText: {
     if (root.historyOpen) {
+      // Nothing recorded yet: say so instead of showing an empty box. The
+      // list itself is zero-height, so the hint slot is the whole dropdown.
+      if (root.rowsCount === 0) return "Empty list \u2014 nothing to resend yet"
       return "Resend " + (root.safeListIndex + 1) + "/" + root.rowsCount
         + " \u2014 Enter to insert, Esc to close"
     }
@@ -366,14 +369,15 @@ Item {
   }
 
   // ---- resend query rows ----
-  // The dropdown only offers itself when it can: a non-empty list, the
-  // mechanism switched on, and a line with nothing typed in it. Flags do NOT
-  // block it (a defaultFlags prefill like "-p " still counts as empty), but
-  // the APPS and FILES screens are left alone — there Down already walks the
-  // rows and hijacking it would strand the list behind the keyboard.
+  // The dropdown only offers itself when the mechanism is on and the line has
+  // nothing typed in it. Flags do NOT block it (a defaultFlags prefill like
+  // "-p " still counts as empty), but the APPS and FILES screens are left
+  // alone — there Down already walks the rows and hijacking it would strand
+  // the list behind the keyboard. An EMPTY list still opens: it explains
+  // itself with the "Empty list" hint instead of doing nothing on Down.
   readonly property bool historyEligible: root.stripped === ""
     && !root.inApps && !root.inFiles
-    && history.enabled && history.entries.length > 0
+    && history.enabled
   readonly property var historyRows: history.entries.map(function(e) {
     return { kind: "history", label: e, path: e, iconUrl: "" }
   })
@@ -692,7 +696,10 @@ Item {
     case 8: showBarIconToggle.clicked(); break
     case 9:
       historyField.forceActiveFocus()
-      historyField.cursorPosition = historyField.text.length
+      // Six digits wide, so the old value is almost always replaced whole:
+      // select it instead of parking the caret after it, otherwise the user
+      // has to backspace through "10" before typing a new number.
+      historyField.selectAll()
       break
     case 10:
       defaultFlagsField.forceActiveFocus()
@@ -1801,56 +1808,86 @@ Item {
                   onClicked: root.draftBarIcon = !root.draftBarIcon
                 }
 
-                // Resend-query cap. Free-form on purpose (the plan asked for
-                // a number, not a preset list), so the field filters to digits
-                // as you type and clampHistory() fixes the range on Apply —
-                // an empty box means "use the default", 0 means "off".
-                TextField {
-                  id: historyField
+                // Resend-query cap. A labelled number box, NOT another
+                // full-width field: the value is 0..200, so six digits is
+                // plenty and the row reads like a label + control pair
+                // instead of stretching the input across the whole panel.
+                Row {
                   width: parent.width
-                  placeholderText: "Past queries to keep  0 = off"
-                  hasCursor: root.settingsIndex === 9
-                  onHoveredChanged: if (historyField.hovered) root.settingsIndex = 9
-                  onTextChanged: {
-                    var digits = text.replace(/[^0-9]/g, "")
-                    if (digits !== text) {
-                      text = digits
-                      cursorPosition = digits.length
+                  spacing: Style.spacing.rowPaddingX
+
+                  Text {
+                    // Row titles elsewhere in this panel (Ui/Toggle) are
+                    // bold + subtitle + foreground; match them exactly.
+                    anchors.verticalCenter: parent.verticalCenter
+                    textFormat: Text.PlainText
+                    text: "Query history"
+                    color: Color.foreground
+                    font.family: Style.font.family
+                    font.pixelSize: Style.font.subtitle
+                    font.bold: true
+                    elide: Text.ElideRight
+                  }
+
+                  TextField {
+                    id: historyField
+                    // Six digits, measured in the field's own font (a theme or
+                    // font swap changes the advance) plus the kit's own
+                    // horizontal padding, so the box is always 6 characters.
+                    width: historyFieldMetrics.horizontalAdvance + Style.space(22)
+                    placeholderText: "10"
+                    hasCursor: root.settingsIndex === 9
+                    onHoveredChanged: if (historyField.hovered) root.settingsIndex = 9
+                    onTextChanged: {
+                      var digits = text.replace(/[^0-9]/g, "")
+                      if (digits !== text) {
+                        text = digits
+                        cursorPosition = digits.length
+                      }
+                      if (root.draftHistory !== text) root.draftHistory = text
                     }
-                    if (root.draftHistory !== text) root.draftHistory = text
-                  }
-                  Connections {
-                    target: root
-                    function onDraftHistoryChanged() {
-                      if (historyField.text !== root.draftHistory && !historyField.activeFocus)
-                        historyField.text = root.draftHistory
+                    Connections {
+                      target: root
+                      function onDraftHistoryChanged() {
+                        if (historyField.text !== root.draftHistory && !historyField.activeFocus)
+                          historyField.text = root.draftHistory
+                      }
+                    }
+                    // The field owns the keys while focused (settingsKeys is
+                    // blocked): Up/Down leave the editor and keep walking the
+                    // settings cursor, Enter jumps straight to Apply, Esc just
+                    // drops back out — the same contract as the flags editor.
+                    Keys.onDownPressed: function(event) {
+                      event.accepted = true
+                      settingsKeys.forceActiveFocus()
+                      root.settingsMove(1)
+                    }
+                    Keys.onUpPressed: function(event) {
+                      event.accepted = true
+                      settingsKeys.forceActiveFocus()
+                      root.settingsMove(-1)
+                    }
+                    Keys.onReturnPressed: function(event) {
+                      event.accepted = true
+                      settingsKeys.forceActiveFocus()
+                      root.settingsIndex = 11
+                    }
+                    Keys.onEnterPressed: function(event) {
+                      event.accepted = true
+                      settingsKeys.forceActiveFocus()
+                      root.settingsIndex = 11
+                    }
+                    Keys.onEscapePressed: function(event) {
+                      event.accepted = true
+                      settingsKeys.forceActiveFocus()
                     }
                   }
-                  Keys.onDownPressed: function(event) {
-                    event.accepted = true
-                    settingsKeys.forceActiveFocus()
-                    root.settingsMove(1)
-                  }
-                  Keys.onUpPressed: function(event) {
-                    event.accepted = true
-                    settingsKeys.forceActiveFocus()
-                    root.settingsMove(-1)
-                  }
-                  Keys.onReturnPressed: function(event) {
-                    event.accepted = true
-                    settingsKeys.forceActiveFocus()
-                    root.settingsIndex = 11
-                  }
-                  Keys.onEnterPressed: function(event) {
-                    event.accepted = true
-                    settingsKeys.forceActiveFocus()
-                    root.settingsIndex = 11
-                  }
-                  Keys.onEscapePressed: function(event) {
-                    // Same as the flags editor: the first Esc leaves the
-                    // editor, the panel's own Esc closes the settings.
-                    event.accepted = true
-                    settingsKeys.forceActiveFocus()
+
+                  // Non-visual: the six-digit width probe for the field above.
+                  TextMetrics {
+                    id: historyFieldMetrics
+                    font: historyField.font
+                    text: "000000"
                   }
                 }
 
