@@ -74,6 +74,7 @@ Item {
   // ---- settings draft (staged until Apply) ----
   property bool draftShowO: true
   property bool draftShowApps: true
+  property string draftAppsView: "grid"
   property bool draftShowFiles: true
   property string draftDefaultMode: "auto"
   property bool draftShowHidden: false
@@ -344,10 +345,17 @@ Item {
     return rows
   }
 
-  readonly property var displayRows: root.searchMode ? root.searchRows : (root.inFiles ? root.fileRows : ([]))
+  readonly property var displayRows: root.searchMode ? root.searchRows
+    : (root.inFiles ? root.fileRows : (root.appsListMode ? root.gridItems : ([])))
   readonly property int rowsCount: root.displayRows.length
 
-  readonly property bool gridMode: root.inApps && !root.showHint
+  // APPS screen: the icon grid by default, or a plain one-row-per-app list
+  // when the "Apps view" setting says so. appsScreen is the shared parent so
+  // exactly one of the two renders (and contentHeight picks the right height:
+  // gridHeight, or the list path that already yields listHeight).
+  readonly property bool appsScreen: root.inApps && !root.showHint
+  readonly property bool appsListMode: root.appsScreen && store.appsView === "list"
+  readonly property bool gridMode: root.appsScreen && store.appsView !== "list"
 
   // ---- autocomplete ----
   readonly property int safeGridIndex: root.gridItems.length === 0 ? 0 : Math.max(0, Math.min(root.gridIndex, root.gridItems.length - 1))
@@ -543,6 +551,7 @@ Item {
   function seedSettings() {
     root.draftShowO = store.showO
     root.draftShowApps = store.showApps
+    root.draftAppsView = store.appsView
     root.draftShowFiles = store.showFiles
     root.draftDefaultMode = store.defaultMode
     root.draftShowHidden = store.showHidden
@@ -556,13 +565,13 @@ Item {
   // target: Down from the flags field enters it (landing on Apply), Down
   // while inside is a no-op (nothing sits below and Down must never pick a
   // button — switching Apply/Close is Left/Right only), Up leaves back to the
-  // field. Above the field the walk is bounded to 0..7, no wrap.
+  // field. Above the field the walk is bounded to 0..8, no wrap.
   function settingsMove(dir) {
-    if (root.settingsIndex > 7) {
-      if (dir < 0) root.settingsIndex = 7
+    if (root.settingsIndex > 8) {
+      if (dir < 0) root.settingsIndex = 8
     } else {
       var next = root.settingsIndex + dir
-      if (next > 7) root.settingsIndex = 8
+      if (next > 8) root.settingsIndex = 9
       else root.settingsIndex = Math.max(0, next)
     }
   }
@@ -571,56 +580,67 @@ Item {
   // users can reach Close directly with the tab chain (vertical walk treats
   // the row as a single unit).
   function settingsTab(dir) {
-    var n = 10 // toggles x6 + dropdown + flags field + Apply + Close
+    var n = 11 // toggles x5 + dropdowns x2 + flags field + Apply + Close
     root.settingsIndex = (root.settingsIndex + dir + n) % n
   }
 
   // Left/Right (+ h/l) act on the control the cursor stands on: toggles flip,
-  // the mode dropdown steps Auto/Apps/Files, the bottom row switches between
+  // the dropdowns step their options, the bottom row switches between
   // Apply/Close, the flags field does nothing (the editor gets the caret
   // arrows while focused).
   function settingsHorizontal(dir) {
     if (dir === 0) return
-    if (root.settingsIndex >= 8) {
-      root.settingsIndex = root.settingsIndex === 8 ? 9 : 8
+    if (root.settingsIndex >= 9) {
+      root.settingsIndex = root.settingsIndex === 9 ? 10 : 9
       return
     }
-    if (root.settingsIndex === 3) {
-      var opts = defaultModeDropdown.options
-      if (opts.length === 0) return
-      var idx = 0
-      for (var i = 0; i < opts.length; i++)
-        if (opts[i].value === root.draftDefaultMode) { idx = i; break }
-      root.draftDefaultMode = opts[(idx + dir + opts.length) % opts.length].value
+    if (root.settingsIndex === 2) {
+      root.draftAppsView = root.dropdownStep(appsViewDropdown.options, root.draftAppsView, dir)
+      return
+    }
+    if (root.settingsIndex === 4) {
+      root.draftDefaultMode = root.dropdownStep(defaultModeDropdown.options, root.draftDefaultMode, dir)
       return
     }
     // Toggle rows flip like Enter; anything else is a no-op for horizontal.
     switch (root.settingsIndex) {
     case 0: showOToggle.clicked(); break
     case 1: showAppsToggle.clicked(); break
-    case 2: showFilesToggle.clicked(); break
-    case 4: showHiddenToggle.clicked(); break
-    case 5: animationsToggle.clicked(); break
-    case 6: confirmRunToggle.clicked(); break
+    case 3: showFilesToggle.clicked(); break
+    case 5: showHiddenToggle.clicked(); break
+    case 6: animationsToggle.clicked(); break
+    case 7: confirmRunToggle.clicked(); break
     }
+  }
+
+  // Next (previous) option value of a Dropdown, wrapping around. The picker
+  // emits changed() only when its popup is used, so the keyboard path writes
+  // the draft itself and the value binding follows.
+  function dropdownStep(options, current, dir) {
+    if (options.length === 0) return current
+    var idx = 0
+    for (var i = 0; i < options.length; i++)
+      if (options[i].value === current) { idx = i; break }
+    return options[(idx + dir + options.length) % options.length].value
   }
 
   function settingsActivate() {
     switch (root.settingsIndex) {
     case 0: showOToggle.clicked(); break
     case 1: showAppsToggle.clicked(); break
-    case 2: showFilesToggle.clicked(); break
-    case 3: defaultModeDropdown.toggle(); break
-    case 4: showHiddenToggle.clicked(); break
-    case 5: animationsToggle.clicked(); break
-    case 6: confirmRunToggle.clicked(); break
-    case 7:
+    case 2: appsViewDropdown.toggle(); break
+    case 3: showFilesToggle.clicked(); break
+    case 4: defaultModeDropdown.toggle(); break
+    case 5: showHiddenToggle.clicked(); break
+    case 6: animationsToggle.clicked(); break
+    case 7: confirmRunToggle.clicked(); break
+    case 8:
       defaultFlagsField.forceActiveFocus()
       defaultFlagsField.cursorPosition = defaultFlagsField.text.length
       break
-    case 8:
-      root.settingsApply(); break
     case 9:
+      root.settingsApply(); break
+    case 10:
       root.exitSettings(); break
     }
   }
@@ -629,6 +649,7 @@ Item {
   function settingsApply() {
     store.showO = root.draftShowO
     store.showApps = root.draftShowApps
+    store.appsView = root.draftAppsView
     store.showFiles = root.draftShowFiles
     store.defaultMode = root.draftDefaultMode
     store.showHidden = root.draftShowHidden
@@ -900,6 +921,26 @@ Item {
           }
         }
         root.close()
+        return
+      }
+      if (root.inApps && root.appsListMode) {
+        // Apps-as-list: the selection lives in selectedIndex (displayRows ==
+        // gridItems here), so the generic row branch below would already do
+        // the right thing — launch the highlighted app, else fall back to a
+        // web search. Only the empty-query case needs its own guard: the list
+        // shows every app then, and Enter must not launch row 0 blindly.
+        if (!root.stripped) {
+          root.close()
+          return
+        }
+        var al = root.displayRows[root.safeListIndex]
+        if (al && al.kind === "app") {
+          root._opening = true
+          root.launchApp(al)
+          root.close()
+        } else {
+          root.runMode("web", root.stripped)
+        }
         return
       }
       if (root.inApps) {
@@ -1310,7 +1351,7 @@ Item {
             root.onHotkey(Flags.ctrlCommand(event.key, true))
             event.accepted = true
           } else if (root.hasFlag) {
-            if (root.inApps) {
+            if (root.inApps && !root.appsListMode) {
               root.gridKeys(event)
             } else {
               root.listKeys(event)
@@ -1320,7 +1361,11 @@ Item {
             root.listKeys(event)
             event.accepted = true
           } else if (root.inApps) {
-            root.gridKeys(event)
+            // The apps screen as a list navigates exactly like the other
+            // lists (first Down selects row 0, Enter launches) — no grid
+            // "engage" level.
+            if (root.appsListMode) root.listKeys(event)
+            else root.gridKeys(event)
             event.accepted = true
           } else if (event.key === Qt.Key_Left || event.key === Qt.Key_Right) {
             root.cycleMode(event.key === Qt.Key_Right ? 1 : -1)
@@ -1496,7 +1541,7 @@ Item {
               id: settingsKeys
               anchors.fill: parent
               focus: true
-              blocked: defaultFlagsField.activeFocus || defaultModeDropdown.popupOpen
+              blocked: defaultFlagsField.activeFocus || defaultModeDropdown.popupOpen || appsViewDropdown.popupOpen
               onMoveRequested: function(dx, dy) {
                 if (dx !== 0) root.settingsHorizontal(dx)
                 else root.settingsMove(dy)
@@ -1537,14 +1582,28 @@ Item {
                   onClicked: root.draftShowApps = !root.draftShowApps
                 }
 
+                Dropdown {
+                  id: appsViewDropdown
+                  width: parent.width
+                  label: "Apps view"
+                  options: [
+                    { value: "grid", label: "Grid" },
+                    { value: "list", label: "List" }
+                  ]
+                  value: root.draftAppsView
+                  hasCursor: root.settingsIndex === 2
+                  onHovered: function(h) { if (h) root.settingsIndex = 2 }
+                  onChanged: function(value) { root.draftAppsView = value }
+                }
+
                 Toggle {
                   id: showFilesToggle
                   width: parent.width
                   label: "Files island"
                   description: "Show the FILES search button"
                   checked: root.draftShowFiles
-                  hasCursor: root.settingsIndex === 2
-                  onHovered: function(h) { if (h) root.settingsIndex = 2 }
+                  hasCursor: root.settingsIndex === 3
+                  onHovered: function(h) { if (h) root.settingsIndex = 3 }
                   onClicked: root.draftShowFiles = !root.draftShowFiles
                 }
 
@@ -1562,8 +1621,8 @@ Item {
                     { value: "files", label: "Files" }
                   ]
                   value: root.draftDefaultMode
-                  hasCursor: root.settingsIndex === 3
-                  onHovered: function(h) { if (h) root.settingsIndex = 3 }
+                  hasCursor: root.settingsIndex === 4
+                  onHovered: function(h) { if (h) root.settingsIndex = 4 }
                   onChanged: function(value) { root.draftDefaultMode = value }
                 }
 
@@ -1573,8 +1632,8 @@ Item {
                   label: "Show hidden by default"
                   description: "Include dotfiles in file and directory searches"
                   checked: root.draftShowHidden
-                  hasCursor: root.settingsIndex === 4
-                  onHovered: function(h) { if (h) root.settingsIndex = 4 }
+                  hasCursor: root.settingsIndex === 5
+                  onHovered: function(h) { if (h) root.settingsIndex = 5 }
                   onClicked: root.draftShowHidden = !root.draftShowHidden
                 }
 
@@ -1584,8 +1643,8 @@ Item {
                   label: "Animations"
                   description: "Smooth panel resize, island collapse, fades and color shifts; off = instant response"
                   checked: root.draftAnimations
-                  hasCursor: root.settingsIndex === 5
-                  onHovered: function(h) { if (h) root.settingsIndex = 5 }
+                  hasCursor: root.settingsIndex === 6
+                  onHovered: function(h) { if (h) root.settingsIndex = 6 }
                   onClicked: root.draftAnimations = !root.draftAnimations
                 }
 
@@ -1595,8 +1654,8 @@ Item {
                   label: "Shell command warning"
                   description: "Press Enter twice to run -r / Ctrl+0 commands instead of running them instantly"
                   checked: root.draftConfirmRun
-                  hasCursor: root.settingsIndex === 6
-                  onHovered: function(h) { if (h) root.settingsIndex = 6 }
+                  hasCursor: root.settingsIndex === 7
+                  onHovered: function(h) { if (h) root.settingsIndex = 7 }
                   onClicked: root.draftConfirmRun = !root.draftConfirmRun
                 }
 
@@ -1604,8 +1663,8 @@ Item {
                   id: defaultFlagsField
                   width: parent.width
                   placeholderText: "Flags prefilled on open  e.g. -g -. -p"
-                  hasCursor: root.settingsIndex === 7
-                  onHoveredChanged: if (defaultFlagsField.hovered) root.settingsIndex = 7
+                  hasCursor: root.settingsIndex === 8
+                  onHoveredChanged: if (defaultFlagsField.hovered) root.settingsIndex = 8
                   onTextChanged: {
                     // Guarded: never echo an external set back into the draft,
                     // so the caret is not yanked around while typing.
@@ -1637,12 +1696,12 @@ Item {
                   Keys.onReturnPressed: function(event) {
                     event.accepted = true
                     settingsKeys.forceActiveFocus()
-                    root.settingsIndex = 8
+                    root.settingsIndex = 9
                   }
                   Keys.onEnterPressed: function(event) {
                     event.accepted = true
                     settingsKeys.forceActiveFocus()
-                    root.settingsIndex = 8
+                    root.settingsIndex = 9
                   }
                   Keys.onEscapePressed: function(event) {
                     // First Esc drops out of the editor back to the settings
@@ -1660,8 +1719,8 @@ Item {
                     id: applyButton
                     text: "Apply"
                     selected: true
-                    hasCursor: root.settingsIndex === 8
-                    onHovered: function(h) { if (h) root.settingsIndex = 8 }
+                    hasCursor: root.settingsIndex === 9
+                    onHovered: function(h) { if (h) root.settingsIndex = 9 }
                     onClicked: root.settingsApply()
 
                     // Apply is permanently emphasized via `selected`, whose
@@ -1683,8 +1742,8 @@ Item {
                   Button {
                     id: closeButton
                     text: "Close"
-                    hasCursor: root.settingsIndex === 9
-                    onHovered: function(h) { if (h) root.settingsIndex = 9 }
+                    hasCursor: root.settingsIndex === 10
+                    onHovered: function(h) { if (h) root.settingsIndex = 10 }
                     onClicked: root.exitSettings()
                   }
                 }
