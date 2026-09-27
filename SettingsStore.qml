@@ -4,8 +4,8 @@ import Quickshell.Io
 
 // Persistent settings for the Obscure launcher. Values live in
 // ~/.config/omarchy/obscure.json (kept out of the plugin checkout and the
-// package-owned shell.json). Loaded once at startup; each change calls save()
-// which debounces a write through a short-lived Process.
+// package-owned shell.json). Read blocking at startup (FileView below); each
+// change calls save() which debounces a write through a short-lived Process.
 // Root is an invisible Item (not QtObject): Process must be a child of a
 // type with a default `data` property.
 Item {
@@ -23,6 +23,10 @@ Item {
   // How the APPS screen renders its matches: "grid" (icon grid, the original)
   // or "list" (one row per app, the same list the search dropdown uses).
   property string appsView: "grid"
+  // Show the launcher's magnifier button in the top bar. The bar host zeroes
+  // a slot whose widget is invisible (ModuleSlot implicitWidth checks
+  // activeItem.visible), so hiding the root leaves no gap behind.
+  property bool showBarIcon: true
   // Ask to press Enter a second time before running a shell command (-r /
   // Ctrl+0); off = execute instantly. Default ON: silent shell execution is
   // otherwise one keystroke away from a search typo.
@@ -31,7 +35,6 @@ Item {
   property bool ready: false
 
   readonly property string configPath: Quickshell.env("HOME") + "/.config/omarchy/obscure.json"
-  property string _buf: ""
 
   // Single-quote a string for use inside sh -lc. JSON only ever contains
   // double quotes, but encode the whole path anyway.
@@ -40,8 +43,7 @@ Item {
   }
 
   function load() {
-    proc.command = ["sh", "-lc", "cat " + root.q(root.configPath) + " 2>/dev/null || true"]
-    proc.running = true
+    root.apply(file.text())
   }
 
   function apply(raw) {
@@ -55,6 +57,7 @@ Item {
     root.showFiles = o.showFiles === undefined ? true : !!o.showFiles
     root.animations = o.animations === undefined ? true : !!o.animations
     root.appsView = o.appsView === "list" ? "list" : "grid"
+    root.showBarIcon = o.showBarIcon === undefined ? true : !!o.showBarIcon
     root.confirmRun = o.confirmRun === undefined ? true : !!o.confirmRun
     // Kept verbatim (no trim): "-g " with its trailing space must stay so the
     // chip is already active the moment the card reopens.
@@ -82,6 +85,7 @@ Item {
         showFiles: root.showFiles,
         animations: root.animations,
         appsView: root.appsView,
+        showBarIcon: root.showBarIcon,
         confirmRun: root.confirmRun,
         defaultFlags: root.defaultFlags
       }
@@ -94,17 +98,19 @@ Item {
     }
   }
 
-  Process {
-    id: proc
-    stdout: SplitParser {
-      onRead: function(line) {
-        root._buf += String(line) + "\n"
-      }
-    }
-    onExited: function(exitCode, exitStatus) {
-      root.apply(root._buf)
-      root._buf = ""
-    }
+  // The config is a couple of hundred bytes, so it is read BLOCKING at
+  // construction instead of through a `cat` process: the bar widget needs
+  // showBarIcon on its very first frame (an async read would paint the icon
+  // and then pull it a frame later), and the panel wants its settings before
+  // the first open rather than one open late. watchChanges keeps every live
+  // instance in step with writes from anywhere — the panel's own save()
+  // included, which is harmless: apply() is idempotent and never calls save().
+  FileView {
+    id: file
+    path: root.configPath
+    blockLoading: true
+    watchChanges: true
+    onFileChanged: root.load()
   }
 
   Process {
@@ -114,5 +120,5 @@ Item {
     }
   }
 
-  Component.onCompleted: Qt.callLater(root.load)
+  Component.onCompleted: root.load()
 }

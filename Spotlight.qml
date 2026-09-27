@@ -80,6 +80,7 @@ Item {
   property bool draftShowHidden: false
   property bool draftAnimations: true
   property bool draftConfirmRun: true
+  property bool draftBarIcon: true
   property string draftDefaultFlags: ""
   // Keyboard cursor over the settings controls (see settingsKeys).
   property int settingsIndex: 0
@@ -567,6 +568,7 @@ Item {
     root.draftShowHidden = store.showHidden
     root.draftAnimations = store.animations
     root.draftConfirmRun = store.confirmRun
+    root.draftBarIcon = store.showBarIcon
     root.draftDefaultFlags = store.defaultFlags
     root.settingsIndex = 0
   }
@@ -575,13 +577,13 @@ Item {
   // target: Down from the flags field enters it (landing on Apply), Down
   // while inside is a no-op (nothing sits below and Down must never pick a
   // button — switching Apply/Close is Left/Right only), Up leaves back to the
-  // field. Above the field the walk is bounded to 0..8, no wrap.
+  // field. Above the field the walk is bounded to 0..9, no wrap.
   function settingsMove(dir) {
-    if (root.settingsIndex > 8) {
-      if (dir < 0) root.settingsIndex = 8
+    if (root.settingsIndex > 9) {
+      if (dir < 0) root.settingsIndex = 9
     } else {
       var next = root.settingsIndex + dir
-      if (next > 8) root.settingsIndex = 9
+      if (next > 9) root.settingsIndex = 10
       else root.settingsIndex = Math.max(0, next)
     }
   }
@@ -590,7 +592,7 @@ Item {
   // users can reach Close directly with the tab chain (vertical walk treats
   // the row as a single unit).
   function settingsTab(dir) {
-    var n = 11 // toggles x5 + dropdowns x2 + flags field + Apply + Close
+    var n = 12 // toggles x6 + dropdowns x2 + flags field + Apply + Close
     root.settingsIndex = (root.settingsIndex + dir + n) % n
   }
 
@@ -600,8 +602,8 @@ Item {
   // arrows while focused).
   function settingsHorizontal(dir) {
     if (dir === 0) return
-    if (root.settingsIndex >= 9) {
-      root.settingsIndex = root.settingsIndex === 9 ? 10 : 9
+    if (root.settingsIndex >= 10) {
+      root.settingsIndex = root.settingsIndex === 10 ? 11 : 10
       return
     }
     if (root.settingsIndex === 2) {
@@ -620,6 +622,7 @@ Item {
     case 5: showHiddenToggle.clicked(); break
     case 6: animationsToggle.clicked(); break
     case 7: confirmRunToggle.clicked(); break
+    case 8: showBarIconToggle.clicked(); break
     }
   }
 
@@ -644,13 +647,14 @@ Item {
     case 5: showHiddenToggle.clicked(); break
     case 6: animationsToggle.clicked(); break
     case 7: confirmRunToggle.clicked(); break
-    case 8:
+    case 8: showBarIconToggle.clicked(); break
+    case 9:
       defaultFlagsField.forceActiveFocus()
       defaultFlagsField.cursorPosition = defaultFlagsField.text.length
       break
-    case 9:
-      root.settingsApply(); break
     case 10:
+      root.settingsApply(); break
+    case 11:
       root.exitSettings(); break
     }
   }
@@ -665,6 +669,7 @@ Item {
     store.showHidden = root.draftShowHidden
     store.animations = root.draftAnimations
     store.confirmRun = root.draftConfirmRun
+    store.showBarIcon = root.draftBarIcon
     // Kept verbatim (no trim): "-g " must survive so the chip is live on the
     // next open, same rule as SettingsStore.apply().
     store.defaultFlags = root.draftDefaultFlags
@@ -1689,12 +1694,23 @@ Item {
                   onClicked: root.draftConfirmRun = !root.draftConfirmRun
                 }
 
+                Toggle {
+                  id: showBarIconToggle
+                  width: parent.width
+                  label: "Bar icon"
+                  description: "Show the magnifier button in the top bar (hotkeys keep working)"
+                  checked: root.draftBarIcon
+                  hasCursor: root.settingsIndex === 8
+                  onHovered: function(h) { if (h) root.settingsIndex = 8 }
+                  onClicked: root.draftBarIcon = !root.draftBarIcon
+                }
+
                 TextField {
                   id: defaultFlagsField
                   width: parent.width
                   placeholderText: "Flags prefilled on open  e.g. -g -. -p"
-                  hasCursor: root.settingsIndex === 8
-                  onHoveredChanged: if (defaultFlagsField.hovered) root.settingsIndex = 8
+                  hasCursor: root.settingsIndex === 9
+                  onHoveredChanged: if (defaultFlagsField.hovered) root.settingsIndex = 9
                   onTextChanged: {
                     // Guarded: never echo an external set back into the draft,
                     // so the caret is not yanked around while typing.
@@ -1726,12 +1742,12 @@ Item {
                   Keys.onReturnPressed: function(event) {
                     event.accepted = true
                     settingsKeys.forceActiveFocus()
-                    root.settingsIndex = 9
+                    root.settingsIndex = 10
                   }
                   Keys.onEnterPressed: function(event) {
                     event.accepted = true
                     settingsKeys.forceActiveFocus()
-                    root.settingsIndex = 9
+                    root.settingsIndex = 10
                   }
                   Keys.onEscapePressed: function(event) {
                     // First Esc drops out of the editor back to the settings
@@ -1749,8 +1765,8 @@ Item {
                     id: applyButton
                     text: "Apply"
                     selected: true
-                    hasCursor: root.settingsIndex === 9
-                    onHovered: function(h) { if (h) root.settingsIndex = 9 }
+                    hasCursor: root.settingsIndex === 10
+                    onHovered: function(h) { if (h) root.settingsIndex = 10 }
                     onClicked: root.settingsApply()
 
                     // Apply is permanently emphasized via `selected`, whose
@@ -1772,8 +1788,8 @@ Item {
                   Button {
                     id: closeButton
                     text: "Close"
-                    hasCursor: root.settingsIndex === 10
-                    onHovered: function(h) { if (h) root.settingsIndex = 10 }
+                    hasCursor: root.settingsIndex === 11
+                    onHovered: function(h) { if (h) root.settingsIndex = 11 }
                     onClicked: root.exitSettings()
                   }
                 }
