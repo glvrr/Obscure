@@ -81,6 +81,8 @@ Item {
   property bool draftAnimations: true
   property bool draftConfirmRun: true
   property bool draftBarIcon: true
+  // History cap as free text while editing ("0" .. "200"), parsed on Apply.
+  property string draftHistory: "10"
   property string draftDefaultFlags: ""
   // Keyboard cursor over the settings controls (see settingsKeys).
   property int settingsIndex: 0
@@ -88,6 +90,14 @@ Item {
   // default flags; cleared by flashTimer.
   property string flashNote: ""
   readonly property bool flashActive: root.flashNote !== ""
+
+  // ---- resend query (history dropdown) ----
+  // Down on an empty line pops the list of past queries; Up/Down walk it and
+  // Enter INSERTS the highlighted one into the field (it does not run it — one
+  // more Enter does that). Esc or any typing closes it again. The highlight is
+  // the ordinary selectedIndex, so the delegate, the scroll reveal and the
+  // scrollbar all work unchanged.
+  property bool historyOpen: false
 
   // ---- parsed query + mode resolution ----
   readonly property var parsed: Flags.parseQuery(root.query)
@@ -212,6 +222,10 @@ Item {
   readonly property bool appsLoading: root.allApps.length === 0
 
   readonly property string hintText: {
+    if (root.historyOpen) {
+      return "Resend " + (root.safeListIndex + 1) + "/" + root.rowsCount
+        + " \u2014 Enter to insert, Esc to close"
+    }
     if (root.hasFlag) {
       // Multiple request flags dispatch together (runRequests); that beats the
       // single-mode hint. Driven by requestModes() (the actual dispatch
@@ -351,8 +365,22 @@ Item {
     return rows
   }
 
-  readonly property var displayRows: root.searchMode ? root.searchRows
-    : (root.inFiles ? root.fileRows : (root.appsListMode ? root.gridItems : ([])))
+  // ---- resend query rows ----
+  // The dropdown only offers itself when it can: a non-empty list, the
+  // mechanism switched on, and a line with nothing typed in it. Flags do NOT
+  // block it (a defaultFlags prefill like "-p " still counts as empty), but
+  // the APPS and FILES screens are left alone — there Down already walks the
+  // rows and hijacking it would strand the list behind the keyboard.
+  readonly property bool historyEligible: root.stripped === ""
+    && !root.inApps && !root.inFiles
+    && history.enabled && history.entries.length > 0
+  readonly property var historyRows: history.entries.map(function(e) {
+    return { kind: "history", label: e, path: e, iconUrl: "" }
+  })
+
+  readonly property var displayRows: root.historyOpen ? root.historyRows
+    : (root.searchMode ? root.searchRows
+    : (root.inFiles ? root.fileRows : (root.appsListMode ? root.gridItems : ([]))))
   readonly property int rowsCount: root.displayRows.length
 
   // APPS screen: the icon grid by default, or a plain one-row-per-app list
@@ -412,6 +440,16 @@ Item {
     if (root.settingsOpen) return root.settingsPanelHeight
     if (root.helpOpen) return root.helpPanelHeight
     if (root.catVisible) return root.catPanelHeight
+    // The resend dropdown fills the content area even though the query is
+    // empty — without this the "empty line" early return below would collapse
+    // the card to nothing while the list is up. Unlike the search hint, the
+    // resend hint does NOT replace the content: the "Resend n/m" line sits
+    // above the list (the list is offset by the same slot height), because
+    // that hint is what tells you Enter inserts instead of running.
+    if (root.historyOpen) {
+      var slot = (root.showHint || root.flashActive) ? Style.space(48) : 0
+      return slot + root.listHeight
+    }
     // Auto mode with an empty query is just the line; the CTRL+S flash keeps
     // the hint slot open briefly even when there is nothing else to show.
     if (!root.searchMode && !root.inApps && !root.inFiles)
@@ -479,7 +517,8 @@ Item {
     { kind: "row", label: "CTRL+R", detail: "Run shell command" },
     { kind: "row", label: "CTRL+K", detail: "Settings menu" },
     { kind: "row", label: "CTRL+S", detail: "Save current flags as default" },
-    { kind: "row", label: "CTRL+H", detail: "Help page" }
+    { kind: "row", label: "CTRL+H", detail: "Help page" },
+    { kind: "row", label: "DOWN", detail: "Past queries (Enter to insert)" }
   ]
   readonly property int helpRowH: Style.space(30)
   // Cap the visible list so the card never grows off-screen; the tail rows are
@@ -501,6 +540,7 @@ Item {
     try { payload = JSON.parse(payloadJson || "{}") } catch (e) { payload = ({}) }
     root._opening = false
     root.runPendingCmd = ""
+    root.historyOpen = false
     var q = String(payload.query || "")
     // Summon routes: payload.tab picks the mode the card opens in —
     // "apps" (grid), "files" (file list) or "auto" (empty line). An explicit
@@ -551,6 +591,7 @@ Item {
     fileSearch.cancel()
     root.opened = false
     root.runPendingCmd = ""
+    root.historyOpen = false
     root.catVisible = false
     root.selectedIndex = 0
     root.gridIndex = 0
@@ -569,21 +610,22 @@ Item {
     root.draftAnimations = store.animations
     root.draftConfirmRun = store.confirmRun
     root.draftBarIcon = store.showBarIcon
+    root.draftHistory = String(store.historyLimit)
     root.draftDefaultFlags = store.defaultFlags
     root.settingsIndex = 0
   }
 
   // Vertical walk (Up/Down + j/k). The bottom buttons row is ONE vertical
-  // target: Down from the flags field enters it (landing on Apply), Down
-  // while inside is a no-op (nothing sits below and Down must never pick a
-  // button — switching Apply/Close is Left/Right only), Up leaves back to the
-  // field. Above the field the walk is bounded to 0..9, no wrap.
+  // target: Down from the last field enters it (landing on Apply), Down while
+  // inside is a no-op (nothing sits below and Down must never pick a button —
+  // switching Apply/Close is Left/Right only), Up leaves back to the field.
+  // Above the fields the walk is bounded to 0..10, no wrap.
   function settingsMove(dir) {
-    if (root.settingsIndex > 9) {
-      if (dir < 0) root.settingsIndex = 9
+    if (root.settingsIndex > 10) {
+      if (dir < 0) root.settingsIndex = 10
     } else {
       var next = root.settingsIndex + dir
-      if (next > 9) root.settingsIndex = 10
+      if (next > 10) root.settingsIndex = 11
       else root.settingsIndex = Math.max(0, next)
     }
   }
@@ -592,18 +634,18 @@ Item {
   // users can reach Close directly with the tab chain (vertical walk treats
   // the row as a single unit).
   function settingsTab(dir) {
-    var n = 12 // toggles x7 + dropdowns x2 + flags field + Apply + Close
+    var n = 13 // toggles x7 + dropdowns x2 + 2 text fields + Apply + Close
     root.settingsIndex = (root.settingsIndex + dir + n) % n
   }
 
   // Left/Right (+ h/l) act on the control the cursor stands on: toggles flip,
   // the dropdowns step their options, the bottom row switches between
-  // Apply/Close, the flags field does nothing (the editor gets the caret
-  // arrows while focused).
+  // Apply/Close, the text fields do nothing (the editor gets the caret arrows
+  // while focused).
   function settingsHorizontal(dir) {
     if (dir === 0) return
-    if (root.settingsIndex >= 10) {
-      root.settingsIndex = root.settingsIndex === 10 ? 11 : 10
+    if (root.settingsIndex >= 11) {
+      root.settingsIndex = root.settingsIndex === 11 ? 12 : 11
       return
     }
     if (root.settingsIndex === 2) {
@@ -649,12 +691,16 @@ Item {
     case 7: confirmRunToggle.clicked(); break
     case 8: showBarIconToggle.clicked(); break
     case 9:
+      historyField.forceActiveFocus()
+      historyField.cursorPosition = historyField.text.length
+      break
+    case 10:
       defaultFlagsField.forceActiveFocus()
       defaultFlagsField.cursorPosition = defaultFlagsField.text.length
       break
-    case 10:
-      root.settingsApply(); break
     case 11:
+      root.settingsApply(); break
+    case 12:
       root.exitSettings(); break
     }
   }
@@ -670,6 +716,8 @@ Item {
     store.animations = root.draftAnimations
     store.confirmRun = root.draftConfirmRun
     store.showBarIcon = root.draftBarIcon
+    store.historyLimit = store.clampHistory(root.draftHistory)
+    root.draftHistory = String(store.historyLimit)
     // Kept verbatim (no trim): "-g " must survive so the chip is live on the
     // next open, same rule as SettingsStore.apply().
     store.defaultFlags = root.draftDefaultFlags
@@ -895,12 +943,15 @@ Item {
     }
     if (cmd === "settings") {
       // CTRL+K toggles the settings view; the draft is seeded and the panel
-      // gets keyboard focus from onSettingsOpenChanged.
+      // gets keyboard focus from onSettingsOpenChanged. The resend list
+      // cannot live under the panel, so it goes away with it.
+      root.historyOpen = false
       root.settingsOpen = !root.settingsOpen
       return
     }
     if (cmd === "help") {
       // CTRL+H toggles the help view (see onHelpOpenChanged for focus).
+      root.historyOpen = false
       root.helpOpen = !root.helpOpen
       return
     }
@@ -926,6 +977,9 @@ Item {
       root.openOmarchy()
       return
     }
+    // Any real submission with a query in it goes on the resend list. The
+    // early returns below (empty query, the O island) never reach this.
+    if (root.stripped !== "") root.addHistory(root.stripped)
     root._activating = true
     try {
       if (root.hasFlag) {
@@ -1175,6 +1229,7 @@ Item {
     // Any typing leaves the settings/help views back to search.
     if (root.settingsOpen && root.query !== "") root.settingsOpen = false
     if (root.helpOpen && root.query !== "") root.helpOpen = false
+    if (root.historyOpen && root.stripped !== "") root.historyOpen = false
     // A different query invalidates any armed shell command.
     if (root.runPendingCmd !== "") root.runPendingCmd = ""
     root.checkCat()
@@ -1255,6 +1310,14 @@ Item {
     onShowOChanged: {
       if (!store.showO && root.headerPos === "omarchy") root.headerPos = ""
     }
+  }
+
+  // Resend queries. The list lives in HistoryStore (~/.local/state/obscure/
+  // history.json, survives restarts); the cap is the "History" setting, so
+  // changing it in the panel trims the list right away.
+  HistoryStore {
+    id: history
+    limit: store.historyLimit
   }
 
   // Self-contained desktop-entry index, used when the host leaves the
@@ -1377,7 +1440,20 @@ Item {
         anchors.rightMargin: root.cardPadX
 
         Keys.onPressed: function(event) {
-          if (event.key === Qt.Key_Escape) {
+          // Resend list first: it owns the arrows, Enter and Esc while it is
+          // up (Esc must close the list, not the whole card), and Down on an
+          // empty line opens it. This branch has to sit above `hasFlag` — with
+          // a flag like -p the line is empty, rowsCount is 0 and listKeys
+          // would swallow Down before we ever get here.
+          if (root.historyOpen && (event.key === Qt.Key_Down || event.key === Qt.Key_Up
+              || event.key === Qt.Key_Return || event.key === Qt.Key_Enter
+              || event.key === Qt.Key_Escape)) {
+            root.historyKeys(event)
+            event.accepted = true
+          } else if (root.historyEligible && event.key === Qt.Key_Down) {
+            root.openHistory()
+            event.accepted = true
+          } else if (event.key === Qt.Key_Escape) {
             if (root.settingsOpen) root.exitSettings()
             else if (root.helpOpen) root.exitHelp()
             else root.close()
@@ -1576,7 +1652,8 @@ Item {
               id: settingsKeys
               anchors.fill: parent
               focus: true
-              blocked: defaultFlagsField.activeFocus || defaultModeDropdown.popupOpen || appsViewDropdown.popupOpen
+              blocked: historyField.activeFocus || defaultFlagsField.activeFocus
+                || defaultModeDropdown.popupOpen || appsViewDropdown.popupOpen
               onMoveRequested: function(dx, dy) {
                 if (dx !== 0) root.settingsHorizontal(dx)
                 else root.settingsMove(dy)
@@ -1705,12 +1782,65 @@ Item {
                   onClicked: root.draftBarIcon = !root.draftBarIcon
                 }
 
+                // Resend-query cap. Free-form on purpose (the plan asked for
+                // a number, not a preset list), so the field filters to digits
+                // as you type and clampHistory() fixes the range on Apply —
+                // an empty box means "use the default", 0 means "off".
+                TextField {
+                  id: historyField
+                  width: parent.width
+                  placeholderText: "Past queries to keep  0 = off"
+                  hasCursor: root.settingsIndex === 9
+                  onHoveredChanged: if (historyField.hovered) root.settingsIndex = 9
+                  onTextChanged: {
+                    var digits = text.replace(/[^0-9]/g, "")
+                    if (digits !== text) {
+                      text = digits
+                      cursorPosition = digits.length
+                    }
+                    if (root.draftHistory !== text) root.draftHistory = text
+                  }
+                  Connections {
+                    target: root
+                    function onDraftHistoryChanged() {
+                      if (historyField.text !== root.draftHistory && !historyField.activeFocus)
+                        historyField.text = root.draftHistory
+                    }
+                  }
+                  Keys.onDownPressed: function(event) {
+                    event.accepted = true
+                    settingsKeys.forceActiveFocus()
+                    root.settingsMove(1)
+                  }
+                  Keys.onUpPressed: function(event) {
+                    event.accepted = true
+                    settingsKeys.forceActiveFocus()
+                    root.settingsMove(-1)
+                  }
+                  Keys.onReturnPressed: function(event) {
+                    event.accepted = true
+                    settingsKeys.forceActiveFocus()
+                    root.settingsIndex = 11
+                  }
+                  Keys.onEnterPressed: function(event) {
+                    event.accepted = true
+                    settingsKeys.forceActiveFocus()
+                    root.settingsIndex = 11
+                  }
+                  Keys.onEscapePressed: function(event) {
+                    // Same as the flags editor: the first Esc leaves the
+                    // editor, the panel's own Esc closes the settings.
+                    event.accepted = true
+                    settingsKeys.forceActiveFocus()
+                  }
+                }
+
                 TextField {
                   id: defaultFlagsField
                   width: parent.width
                   placeholderText: "Flags prefilled on open  e.g. -g -. -p"
-                  hasCursor: root.settingsIndex === 9
-                  onHoveredChanged: if (defaultFlagsField.hovered) root.settingsIndex = 9
+                  hasCursor: root.settingsIndex === 10
+                  onHoveredChanged: if (defaultFlagsField.hovered) root.settingsIndex = 10
                   onTextChanged: {
                     // Guarded: never echo an external set back into the draft,
                     // so the caret is not yanked around while typing.
@@ -1742,12 +1872,12 @@ Item {
                   Keys.onReturnPressed: function(event) {
                     event.accepted = true
                     settingsKeys.forceActiveFocus()
-                    root.settingsIndex = 10
+                    root.settingsIndex = 11
                   }
                   Keys.onEnterPressed: function(event) {
                     event.accepted = true
                     settingsKeys.forceActiveFocus()
-                    root.settingsIndex = 10
+                    root.settingsIndex = 11
                   }
                   Keys.onEscapePressed: function(event) {
                     // First Esc drops out of the editor back to the settings
@@ -1765,8 +1895,8 @@ Item {
                     id: applyButton
                     text: "Apply"
                     selected: true
-                    hasCursor: root.settingsIndex === 10
-                    onHovered: function(h) { if (h) root.settingsIndex = 10 }
+                    hasCursor: root.settingsIndex === 11
+                    onHovered: function(h) { if (h) root.settingsIndex = 11 }
                     onClicked: root.settingsApply()
 
                     // Apply is permanently emphasized via `selected`, whose
@@ -1788,8 +1918,8 @@ Item {
                   Button {
                     id: closeButton
                     text: "Close"
-                    hasCursor: root.settingsIndex === 11
-                    onHovered: function(h) { if (h) root.settingsIndex = 11 }
+                    hasCursor: root.settingsIndex === 12
+                    onHovered: function(h) { if (h) root.settingsIndex = 12 }
                     onClicked: root.exitSettings()
                   }
                 }
@@ -1948,8 +2078,12 @@ Item {
 
           Item {
             id: listColumn
-            visible: !root.gridMode && !root.showHint && !root.settingsOpen && !root.helpOpen && !root.catVisible
+            visible: (!root.gridMode && !root.showHint && !root.settingsOpen && !root.helpOpen && !root.catVisible)
+              || root.historyOpen
             anchors.top: parent.top
+            // The hint line and this column both anchor to the top, so when
+            // both are up (resend list) the column moves below the hint.
+            anchors.topMargin: root.historyOpen && (root.showHint || root.flashActive) ? Style.space(48) : 0
             anchors.left: parent.left
             anchors.right: parent.right
             height: root.listHeight
@@ -2054,6 +2188,58 @@ Item {
     } else if ((event.key === Qt.Key_Return || event.key === Qt.Key_Enter) && !queryField.activeFocus) {
       root.activate()
     }
+  }
+
+  // ---- resend query (history dropdown) ----
+  function openHistory() {
+    if (!root.historyEligible) return
+    root.historyOpen = true
+    root.selectedIndex = 0
+  }
+
+  function closeHistory() {
+    if (!root.historyOpen) return
+    root.historyOpen = false
+  }
+
+  function historyKeys(event) {
+    root.disarmPointer()
+    var n = root.historyRows.length
+    if (event.key === Qt.Key_Down || event.key === Qt.Key_Up) {
+      if (n === 0) return
+      root.selectedIndex = (root.safeListIndex + (event.key === Qt.Key_Down ? 1 : -1) + n) % n
+      Qt.callLater(root.revealListSelection)
+    } else if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter) {
+      root.insertHistory(root.safeListIndex)
+    } else if (event.key === Qt.Key_Escape) {
+      root.closeHistory()
+    }
+  }
+
+  // Put the picked query back into the line and let the user run it. Flags
+  // already standing (a defaultFlags prefill, chips) are kept — they chose the
+  // mode, the history only supplies the text — so a bare "-p" (no trailing
+  // space yet) gets one before the text lands.
+  function insertHistory(index) {
+    var entry = root.historyRows[index]
+    if (!entry) return
+    var p = Flags.prefix(root.query, root.parsed)
+    if (p !== "" && !/\s$/.test(p)) p += " "
+    root.historyOpen = false
+    root.query = p + entry.label
+    Qt.callLater(function() {
+      queryField.forceActiveFocus()
+      queryField.cursorPosition = queryField.text.length
+    })
+  }
+
+  // Record a submitted query. Shell commands stay out of the list on purpose:
+  // a `-r` line replayed from the dropdown would re-arm a shell run from
+  // something that only looks like a search.
+  function addHistory(text) {
+    if (!history.enabled) return
+    if (root.parsedMode === "run") return
+    history.add(text)
   }
 
   // Scroll the (capped) help list: move the highlight and keep it in view.
@@ -2245,7 +2431,10 @@ Item {
       property bool isSelected: index === root.safeListIndex
       property bool isApp: rowItem.kind === "app"
       property bool isDir: rowItem.kind === "dir"
-      property string iconGlyph: rowItem.isDir ? "\uf07b" : "\uf15b"
+      property bool isHistory: rowItem.kind === "history"
+      // Folder / file / clock — the resend rows are the only ones that carry
+      // their text in `label` without being an app.
+      property string iconGlyph: rowItem.isDir ? "\uf07b" : (rowItem.isHistory ? "\uf017" : "\uf15b")
 
       height: root.rowHeight
       width: ListView.view.width
@@ -2293,7 +2482,7 @@ Item {
         anchors.leftMargin: Style.spacing.rowPaddingX + Style.space(36) + Style.spacing.labelGap
         anchors.right: parent.right
         anchors.rightMargin: Style.spacing.rowPaddingX
-        text: rowItem.isApp ? rowItem.label : rowItem.path
+        text: (rowItem.isApp || rowItem.isHistory) ? rowItem.label : rowItem.path
         font.family: Style.font.family
         font.pixelSize: Style.font.heading
         font.weight: Font.Medium
@@ -2307,7 +2496,9 @@ Item {
         onPositionChanged: function(mouse) { root.selectFromRow(rowItem, index, mouse) }
         onClicked: {
           root.selectedIndex = index
-          root.activate()
+          // A resend row fills the line instead of running straight away.
+          if (rowItem.isHistory) root.insertHistory(index)
+          else root.activate()
         }
       }
     }

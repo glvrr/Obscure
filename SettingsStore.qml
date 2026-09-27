@@ -33,6 +33,9 @@ Item {
   // otherwise one keystroke away from a search typo.
   property bool confirmRun: true
   property string defaultFlags: ""
+  // How many past queries the resend dropdown keeps (HistoryStore trims to
+  // this). 0 = the whole resend mechanism is off.
+  property int historyLimit: 10
   property bool ready: false
 
   readonly property string configPath: Quickshell.env("HOME") + "/.config/omarchy/obscure.json"
@@ -41,6 +44,17 @@ Item {
   // double quotes, but encode the whole path anyway.
   function q(s) {
     return "'" + String(s).replace(/'/g, "'\\''") + "'"
+  }
+
+  // History is a count, but the file is hand-editable and the settings field
+  // is free-form: anything that is not a sane integer becomes the default,
+  // and 0 stays meaningful (mechanism off) instead of falling back.
+  function clampHistory(v) {
+    var n = parseInt(v, 10)
+    if (isNaN(n)) return 10
+    if (n < 0) return 0
+    if (n > 200) return 200
+    return n
   }
 
   // Re-read the file. file.reload() is what makes this work at runtime: on
@@ -70,6 +84,7 @@ Item {
     // Kept verbatim (no trim): "-g " with its trailing space must stay so the
     // chip is already active the moment the card reopens.
     root.defaultFlags = String(o.defaultFlags || "")
+    root.historyLimit = root.clampHistory(o.historyLimit)
     root.ready = true
   }
 
@@ -95,7 +110,8 @@ Item {
         appsView: root.appsView,
         showBarIcon: root.showBarIcon,
         confirmRun: root.confirmRun,
-        defaultFlags: root.defaultFlags
+        defaultFlags: root.defaultFlags,
+        historyLimit: root.historyLimit
       }
       var file = root.configPath
       // Write to a sibling and rename: the bar polls this file every second,
