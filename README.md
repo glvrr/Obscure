@@ -49,15 +49,21 @@ omarchy bar put glvr.ninja.obscure --section left --index <n>
 - Or summon it from anywhere, with or without a keybinding:
 
 ```sh
-omarchy-shell shell summon glvr.ninja.obscure '{}'            # default flags prefill
-omarchy-shell shell summon glvr.ninja.obscure '{"tab":"apps"}' # straight to the app grid
+omarchy-shell shell summon glvr.ninja.obscure '{}'                    # default flags prefill
+omarchy-shell shell summon glvr.ninja.obscure '{"tab":"apps"}'        # straight to the app grid
+omarchy-shell shell summon glvr.ninja.obscure '{"flag":"-a"}'        # app search, [apps] chip
+omarchy-shell shell summon glvr.ninja.obscure '{"flag":"-g -p","query":"cats"}'
 ```
 
 No Hyprland binding ships with the plugin. To get one, put any of the `summon`
-lines above into your own config:
+lines above into your own config — `{}` for a plain open, `{"tab":…}` for a
+screen, `{"flag":…}` for anything else:
 
 ```ini
 bind = $mod, SPACE, exec, omarchy-shell shell summon glvr.ninja.obscure '{}'
+bind = $mod, A,     exec, omarchy-shell shell summon glvr.ninja.obscure '{"flag":"-a"}'
+bind = $mod, F,     exec, omarchy-shell shell summon glvr.ninja.obscure '{"flag":"-f"}'
+bind = $mod, G,     exec, omarchy-shell shell summon glvr.ninja.obscure '{"flag":"-g"}'
 ```
 
 ## Update / remove
@@ -111,6 +117,11 @@ omarchy plugin remove glvr.ninja.obscure
   raw token in a single press.
 - **Keyboard first** — arrows switch mode, grid navigation, hotkeys, settings
   and help. Mouse optional.
+- **Summonable into any mode** — a binding or script can open the card on a
+  screen (`{"tab":"apps"}`) or with a flag already in the line
+  (`{"flag":"-g"}`): web search, run, hidden files, multi-search, all reachable
+  without touching the keyboard layout. See
+  [Open modes](#open-modes-summon-payload).
 - **Local** — nothing leaves the machine except the search URL you explicitly
   launch, which opens in your browser via `omarchy launch browser`.
 
@@ -172,6 +183,13 @@ Persisted to `~/.config/omarchy/obscure.json` (the resend list is separate:
 `open()` accepts a JSON payload, so you can summon the card straight into a
 mode — like the system's `SUPER ALT+SPACE` → `omarchy-menu toggle apps`:
 
+| Key | Value | Effect |
+|-----|-------|--------|
+| `tab` | `"apps"`, `"files"`, `"auto"` | which screen to open |
+| `flag` | `"-a"`, `"-g -p"`, `"-."`, … | flags prefilled into the line; the mode follows from them |
+| `query` | `"report"` | text after the flags |
+| `settings` | `true` | open the settings view instead |
+
 ```sh
 # plain open with the default flags prefill (default behavior)
 omarchy-shell shell summon glvr.ninja.obscure '{}'
@@ -199,10 +217,13 @@ omarchy-shell shell summon glvr.ninja.obscure '{"flag":"-f","query":"report"}'
 omarchy-shell shell summon glvr.ninja.obscure '{"flag":"-g -p","query":"cats"}'
 # the apps grid pre-filtered, Enter launches the highlighted one
 omarchy-shell shell summon glvr.ninja.obscure '{"flag":"-a","query":"firefox"}'
+# hidden files, the same trick as typing "-."
+omarchy-shell shell summon glvr.ninja.obscure '{"flag":"-."}'
 ```
 
 A non-empty `flag` replaces the *Default search flags* setting for that open,
-just like an explicit `tab` does.
+just like an explicit `tab` does. Given together, the flag wins the screen (the
+flag's parsed mode is what the card shows); a non-string `flag` is ignored.
 
 ## Under the hood
 
