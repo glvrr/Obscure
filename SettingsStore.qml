@@ -32,6 +32,10 @@ Item {
   // Ctrl+0); off = execute instantly. Default ON: silent shell execution is
   // otherwise one keystroke away from a search typo.
   property bool confirmRun: true
+  // Where a -r / Ctrl+0 command runs: "silent" spawns bash in the background
+  // (invisible), "external" runs it in the system terminal via `omarchy launch
+  // terminal` — the same channel the -oc flag uses.
+  property string runTarget: "silent"
   property string defaultFlags: ""
   // How many past queries the resend dropdown keeps (HistoryStore trims to
   // this). 0 = the whole resend mechanism is off.
@@ -81,6 +85,7 @@ Item {
     root.appsView = o.appsView === "list" ? "list" : "grid"
     root.showBarIcon = o.showBarIcon === undefined ? true : !!o.showBarIcon
     root.confirmRun = o.confirmRun === undefined ? true : !!o.confirmRun
+    root.runTarget = o.runTarget === "external" ? "external" : "silent"
     // Kept verbatim (no trim): "-g " with its trailing space must stay so the
     // chip is already active the moment the card reopens.
     root.defaultFlags = String(o.defaultFlags || "")
@@ -110,6 +115,7 @@ Item {
         appsView: root.appsView,
         showBarIcon: root.showBarIcon,
         confirmRun: root.confirmRun,
+        runTarget: root.runTarget,
         defaultFlags: root.defaultFlags,
         historyLimit: root.historyLimit
       }

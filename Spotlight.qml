@@ -80,6 +80,7 @@ Item {
   property bool draftShowHidden: false
   property bool draftAnimations: true
   property bool draftConfirmRun: true
+  property string draftRunTarget: "silent"
   property bool draftBarIcon: true
   // History cap as free text while editing ("0" .. "200"), parsed on Apply.
   property string draftHistory: "10"
@@ -627,6 +628,7 @@ Item {
     root.draftShowHidden = store.showHidden
     root.draftAnimations = store.animations
     root.draftConfirmRun = store.confirmRun
+    root.draftRunTarget = store.runTarget
     root.draftBarIcon = store.showBarIcon
     root.draftHistory = String(store.historyLimit)
     root.draftDefaultFlags = store.defaultFlags
@@ -639,11 +641,11 @@ Item {
   // switching Apply/Close is Left/Right only), Up leaves back to the field.
   // Above the fields the walk is bounded to 0..10, no wrap.
   function settingsMove(dir) {
-    if (root.settingsIndex > 10) {
-      if (dir < 0) root.settingsIndex = 10
+    if (root.settingsIndex > 11) {
+      if (dir < 0) root.settingsIndex = 11
     } else {
       var next = root.settingsIndex + dir
-      if (next > 10) root.settingsIndex = 11
+      if (next > 11) root.settingsIndex = 12
       else root.settingsIndex = Math.max(0, next)
     }
   }
@@ -652,7 +654,7 @@ Item {
   // users can reach Close directly with the tab chain (vertical walk treats
   // the row as a single unit).
   function settingsTab(dir) {
-    var n = 13 // toggles x7 + dropdowns x2 + 2 text fields + Apply + Close
+    var n = 14 // toggles x7 + dropdowns x3 + 2 text fields + Apply + Close
     root.settingsIndex = (root.settingsIndex + dir + n) % n
   }
 
@@ -662,8 +664,8 @@ Item {
   // while focused).
   function settingsHorizontal(dir) {
     if (dir === 0) return
-    if (root.settingsIndex >= 11) {
-      root.settingsIndex = root.settingsIndex === 11 ? 12 : 11
+    if (root.settingsIndex >= 12) {
+      root.settingsIndex = root.settingsIndex === 12 ? 13 : 12
       return
     }
     if (root.settingsIndex === 2) {
@@ -674,6 +676,10 @@ Item {
       root.draftDefaultMode = root.dropdownStep(defaultModeDropdown.options, root.draftDefaultMode, dir)
       return
     }
+    if (root.settingsIndex === 7) {
+      root.draftRunTarget = root.dropdownStep(runModeDropdown.options, root.draftRunTarget, dir)
+      return
+    }
     // Toggle rows flip like Enter; anything else is a no-op for horizontal.
     switch (root.settingsIndex) {
     case 0: showOToggle.clicked(); break
@@ -681,8 +687,8 @@ Item {
     case 3: showFilesToggle.clicked(); break
     case 5: showHiddenToggle.clicked(); break
     case 6: animationsToggle.clicked(); break
-    case 7: confirmRunToggle.clicked(); break
-    case 8: showBarIconToggle.clicked(); break
+    case 8: confirmRunToggle.clicked(); break
+    case 9: showBarIconToggle.clicked(); break
     }
   }
 
@@ -706,22 +712,23 @@ Item {
     case 4: defaultModeDropdown.toggle(); break
     case 5: showHiddenToggle.clicked(); break
     case 6: animationsToggle.clicked(); break
-    case 7: confirmRunToggle.clicked(); break
-    case 8: showBarIconToggle.clicked(); break
-    case 9:
+    case 7: runModeDropdown.toggle(); break
+    case 8: confirmRunToggle.clicked(); break
+    case 9: showBarIconToggle.clicked(); break
+    case 10:
       historyField.forceActiveFocus()
       // Six digits wide, so the old value is almost always replaced whole:
       // select it instead of parking the caret after it, otherwise the user
       // has to backspace through "10" before typing a new number.
       historyField.selectAll()
       break
-    case 10:
+    case 11:
       defaultFlagsField.forceActiveFocus()
       defaultFlagsField.cursorPosition = defaultFlagsField.text.length
       break
-    case 11:
-      root.settingsApply(); break
     case 12:
+      root.settingsApply(); break
+    case 13:
       root.exitSettings(); break
     }
   }
@@ -736,6 +743,7 @@ Item {
     store.showHidden = root.draftShowHidden
     store.animations = root.draftAnimations
     store.confirmRun = root.draftConfirmRun
+    store.runTarget = root.draftRunTarget
     store.showBarIcon = root.draftBarIcon
     store.historyLimit = store.clampHistory(root.draftHistory)
     root.draftHistory = String(store.historyLimit)
@@ -784,8 +792,23 @@ Item {
       return false
     }
     root.runPendingCmd = ""
-    Quickshell.execDetached(["bash", "-lc", q])
+    root.dispatchShell(q)
     return true
+  }
+
+  // The -r / Ctrl+0 delivery channel, honouring the runTarget setting:
+  // "silent" runs bash in the background, "external" opens a terminal so the
+  // command + its output are visible (same terminal path as -oc, and like it
+  // the query is one argv element — no shell quoting involved).
+  function dispatchShell(q) {
+    var argv = root.runCommandFor(q)
+    Quickshell.execDetached(argv)
+  }
+
+  function runCommandFor(q) {
+    return store.runTarget === "external"
+      ? ["omarchy", "launch", "terminal", "bash", "-lc", q]
+      : ["bash", "-lc", q]
   }
 
   // CTRL+S: remember the current flag chips (or their absence) as the default
@@ -1153,7 +1176,7 @@ Item {
       }
       switch (modes[i]) {
       case "run":
-        if (q) Quickshell.execDetached(["bash", "-lc", q])
+        if (q) root.dispatchShell(q)
         break
       case "menu":
         Quickshell.execDetached(["omarchy-shell", "shell", "toggle", "omarchy.menu", JSON.stringify({ menu: "root" })])
@@ -1730,6 +1753,7 @@ Item {
               focus: true
               blocked: historyField.activeFocus || defaultFlagsField.activeFocus
                 || defaultModeDropdown.popupOpen || appsViewDropdown.popupOpen
+                || runModeDropdown.popupOpen
               onMoveRequested: function(dx, dy) {
                 if (dx !== 0) root.settingsHorizontal(dx)
                 else root.settingsMove(dy)
@@ -1836,14 +1860,28 @@ Item {
                   onClicked: root.draftAnimations = !root.draftAnimations
                 }
 
+                Dropdown {
+                  id: runModeDropdown
+                  width: parent.width
+                  label: "Run -r in"
+                  options: [
+                    { value: "silent", label: "Silent" },
+                    { value: "external", label: "External terminal" }
+                  ]
+                  value: root.draftRunTarget
+                  hasCursor: root.settingsIndex === 7
+                  onHovered: function(h) { if (h) root.settingsIndex = 7 }
+                  onChanged: function(value) { root.draftRunTarget = value }
+                }
+
                 Toggle {
                   id: confirmRunToggle
                   width: parent.width
                   label: "Shell command warning"
                   description: "Press Enter twice to run -r / Ctrl+0 commands instead of running them instantly"
                   checked: root.draftConfirmRun
-                  hasCursor: root.settingsIndex === 7
-                  onHovered: function(h) { if (h) root.settingsIndex = 7 }
+                  hasCursor: root.settingsIndex === 8
+                  onHovered: function(h) { if (h) root.settingsIndex = 8 }
                   onClicked: root.draftConfirmRun = !root.draftConfirmRun
                 }
 
@@ -1853,8 +1891,8 @@ Item {
                   label: "Bar icon"
                   description: "Show the magnifier button in the top bar (hotkeys keep working)"
                   checked: root.draftBarIcon
-                  hasCursor: root.settingsIndex === 8
-                  onHovered: function(h) { if (h) root.settingsIndex = 8 }
+                  hasCursor: root.settingsIndex === 9
+                  onHovered: function(h) { if (h) root.settingsIndex = 9 }
                   onClicked: root.draftBarIcon = !root.draftBarIcon
                 }
 
@@ -1888,8 +1926,8 @@ Item {
                     // which collapsed the field to a sliver.
                     width: Math.max(0, parent.width - historyLabel.implicitWidth - parent.spacing)
                     placeholderText: "10"
-                    hasCursor: root.settingsIndex === 9
-                    onHoveredChanged: if (historyField.hovered) root.settingsIndex = 9
+                    hasCursor: root.settingsIndex === 10
+                    onHoveredChanged: if (historyField.hovered) root.settingsIndex = 10
                     onTextChanged: {
                       var digits = text.replace(/[^0-9]/g, "")
                       if (digits !== text) {
@@ -1922,12 +1960,12 @@ Item {
                     Keys.onReturnPressed: function(event) {
                       event.accepted = true
                       settingsKeys.forceActiveFocus()
-                      root.settingsIndex = 11
+                      root.settingsIndex = 12
                     }
                     Keys.onEnterPressed: function(event) {
                       event.accepted = true
                       settingsKeys.forceActiveFocus()
-                      root.settingsIndex = 11
+                      root.settingsIndex = 12
                     }
                     Keys.onEscapePressed: function(event) {
                       event.accepted = true
@@ -1940,8 +1978,8 @@ Item {
                   id: defaultFlagsField
                   width: parent.width
                   placeholderText: "Flags prefilled on open  e.g. -g -. -p"
-                  hasCursor: root.settingsIndex === 10
-                  onHoveredChanged: if (defaultFlagsField.hovered) root.settingsIndex = 10
+                  hasCursor: root.settingsIndex === 11
+                  onHoveredChanged: if (defaultFlagsField.hovered) root.settingsIndex = 11
                   onTextChanged: {
                     // Guarded: never echo an external set back into the draft,
                     // so the caret is not yanked around while typing.
@@ -1973,12 +2011,12 @@ Item {
                   Keys.onReturnPressed: function(event) {
                     event.accepted = true
                     settingsKeys.forceActiveFocus()
-                    root.settingsIndex = 11
+                    root.settingsIndex = 12
                   }
                   Keys.onEnterPressed: function(event) {
                     event.accepted = true
                     settingsKeys.forceActiveFocus()
-                    root.settingsIndex = 11
+                    root.settingsIndex = 12
                   }
                   Keys.onEscapePressed: function(event) {
                     // First Esc drops out of the editor back to the settings
@@ -1996,8 +2034,8 @@ Item {
                     id: applyButton
                     text: "Apply"
                     selected: true
-                    hasCursor: root.settingsIndex === 11
-                    onHovered: function(h) { if (h) root.settingsIndex = 11 }
+                    hasCursor: root.settingsIndex === 12
+                    onHovered: function(h) { if (h) root.settingsIndex = 12 }
                     onClicked: root.settingsApply()
 
                     // Apply is permanently emphasized via `selected`, whose
@@ -2019,8 +2057,8 @@ Item {
                   Button {
                     id: closeButton
                     text: "Close"
-                    hasCursor: root.settingsIndex === 12
-                    onHovered: function(h) { if (h) root.settingsIndex = 12 }
+                    hasCursor: root.settingsIndex === 13
+                    onHovered: function(h) { if (h) root.settingsIndex = 13 }
                     onClicked: root.exitSettings()
                   }
                 }

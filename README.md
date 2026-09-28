@@ -158,9 +158,12 @@ Open with `Ctrl+K` inside the card, or **right-click** the bar icon.
 - Show hidden by default (equivalent to typing `-.` each time).
 - Animations — master toggle: smooth panel resize and content transitions; off
   makes everything instant.
+- Run `-r` in — where a shell command runs: **Silent** (bash in the background,
+  nothing visible, the default) or **External terminal** (the command runs in
+  your system terminal via `omarchy launch terminal`, same channel as `-oc`).
 - Shell command warning — on by default: running a command via `-r` / `Ctrl+0`
   needs a second Enter (a flash in the hint line asks to confirm); off runs it
-  instantly.
+  instantly. Applies in both run modes.
 - Bar icon — off hides the magnifier button in the top bar; the bar slot
   collapses without leaving a gap and all hotkeys keep working (use
   `omarchy bar put glvr.ninja.obscure …` if you ever remove the widget itself).
