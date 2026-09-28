@@ -4,6 +4,7 @@
   "name": "Obscure",
   "version": "0.2.0",
   "author": "glvr",
+  "license": "MIT",
   "description": "Obscure — spotlight-style launcher for Omarchy: apps, files, directories, and smart search.",
   "kinds": [
     "menu",

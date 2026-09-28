@@ -209,3 +209,7 @@ omarchy restart shell
 
 > Plugins run as unsandboxed code inside the long-lived `omarchy-shell`
 > process. Read the code before you enable it.
+
+## License
+
+[MIT](LICENSE) — copy it, fork it, ship it; keep the copyright line.
