@@ -100,10 +100,12 @@ TextField {
       }
     }
     // The flag list used to live here as a parenthetical; it was long enough
-    // to push the line out of view and it is documented in the help page
-    // anyway (Ctrl+H), so the placeholder just points there.
-    if (root.tabMode === "files") return "Search files...  CTRL+H for help..."
-    return "Obscure...  CTRL+H for help..."
+    // to push the line out of view, and it is documented in the help page
+    // anyway. The "CTRL+H for help..." nudge is a separate right-aligned Text
+    // in Spotlight.qml (queryHelpHint) — a single placeholder can only ever be
+    // one left-aligned string.
+    if (root.tabMode === "files") return "Search files..."
+    return "Obscure..."
   }
 
   // ---- inline autocomplete ----

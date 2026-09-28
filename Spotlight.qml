@@ -1600,6 +1600,31 @@ Item {
               }
             }
 
+            // "CTRL+H for help..." rides the right edge of the field. A
+            // TextField placeholder can only be one left-aligned string, and
+            // the flag list that used to sit there was long enough to crowd
+            // out the query line — the help page documents the flags anyway.
+            // Sibling (not a child) of the field, so its own padding/background
+            // logic stays untouched; rightMargin mirrors the field's padding.
+            Text {
+              id: queryHelpHint
+              anchors.right: queryField.right
+              anchors.rightMargin: queryField.rightPadding
+              anchors.verticalCenter: queryField.verticalCenter
+              // Only while the line is empty: otherwise it would sit under the
+              // typed text (and under the inline autocomplete suffix).
+              visible: queryField.text === ""
+              z: queryField.z + 1
+              text: "CTRL+H for help..."
+              font.family: queryField.font.family
+              font.pixelSize: queryField.font.pixelSize
+              // "A touch lighter than the field fill": the fill is a faint
+              // translucent light, so a low-alpha foreground lands just above
+              // it — dimmer than the kit's placeholder (Qt.darker(foreground,
+              // 1.6)), which keeps the eye on the query line. 0.24 is the knob.
+              color: Util.alpha(queryField.foreground, 0.24)
+            }
+
             Row {
               id: chipRow
               visible: root.filterActive
