@@ -1212,7 +1212,7 @@ Item {
     case "opencode": {
       if (!q) return
       root._opening = true
-      Quickshell.execDetached(["omarchy", "launch", "terminal", "opencode", "--prompt", q])
+      Quickshell.execDetached(["omarchy", "launch", "terminal", "opencode", "--agent", "plan", "--prompt", q])
       root.close()
       break
     }
