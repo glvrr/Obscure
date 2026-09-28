@@ -1250,6 +1250,25 @@ Item {
     iconResolver.indexed.connect(root.rebuildIcons)
   }
 
+  // Panel-owned hotkeys. While the help or the settings view is up, the kit's
+  // PanelKeyCatcher owns the keyboard and only knows Esc/Enter/Tab/arrows/jk —
+  // the Ctrl combos never reach keyCatcher.onHotkey (which is the only place
+  // that turns them into onHotkey), so a second Ctrl+H looked dead. Shortcut is
+  // the one handler that sees the key no matter which item holds focus, and it
+  // is enabled ONLY while the matching panel is up: on the search line the
+  // keyCatcher keeps owning Ctrl+H / Ctrl+K exactly as before.
+  Shortcut {
+    sequence: "Ctrl+H"
+    enabled: root.opened && root.helpOpen
+    onActivated: root.exitHelp()
+  }
+
+  Shortcut {
+    sequence: "Ctrl+K"
+    enabled: root.opened && root.settingsOpen
+    onActivated: root.exitSettings()
+  }
+
   Timer {
     id: appRetry
     interval: 300
