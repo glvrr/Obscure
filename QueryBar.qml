@@ -86,6 +86,7 @@ TextField {
       switch (root.rawMode) {
       case "web": return "Search Google..."
       case "run": return "Run a command..."
+      case "opencode": return "Ask opencode..."
       case "menu": return "Search Omarchy menu..."
       case "dirs": return "Search directories..."
       case "files": return "Search files..."

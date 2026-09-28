@@ -9,6 +9,7 @@ const MODES = {
   i: "images",
   a: "apps",
   o: "menu",
+  oc: "opencode",
   r: "run",
   "as": "artstation",
   "sf": "sketchfab",
@@ -19,14 +20,15 @@ const MODES = {
 
 // Object-literal prototypes expose broken "toString"/"constructor" keys, but
 // they are unreachable here: parseQuery only ever hands us one-letter tokens
-// or the explicit -as/-sf/-ddg/-da words, none of which collide with object
+// or the explicit -as/-sf/-ddg/-da/-oc words, none of which collide with object
 // members. (Verified loop this back into the parsed lookup with in/own checks
 // — a mode key can never be "toString"; the regex guarantees it.)
 
-// A leading flag token. Single letters plus the whole words -as/-sf/-ddg/-da;
+// A leading flag token. Single letters plus the whole words -as/-sf/-ddg/-da/-oc;
 // the alternation + backtracking keep unknown heads ("-af cats", "-ddu") as
-// raw text and prevent "-ddg" from being split into "-d" + raw "dg".
-const FLAG_RE = /^\s*-((?:ddg|da|as|sf|[a-z.]))(?:\s+|$)/
+// raw text and prevent "-ddg" from being split into "-d" + raw "dg". "oc" must
+// sit BEFORE [a-z.] or "-oc" would split into "-o" (menu) + raw "c".
+const FLAG_RE = /^\s*-((?:ddg|da|as|sf|oc|[a-z.]))(?:\s+|$)/
 
 // Splits "text" into { mode, flag, query, hidden, flags }.
 // Leading `-x` tokens (x a known flag letter) select the mode, `-.` toggles
@@ -133,6 +135,7 @@ const CHIP_NAMES = {
   menu: "omarchy",
   run: "run",
   hidden: "hidden",
+  opencode: "opencode",
   "artstation": "artstation",
   "sketchfab": "sketchfab",
   youtube: "youtube",

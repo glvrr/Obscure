@@ -248,6 +248,7 @@ Item {
       if (root.parsedMode === "ddg") return "Search DuckDuckGo for \u201C" + root.stripped + "\u201D"
       if (root.parsedMode === "deviantart") return "Search DeviantArt for \u201C" + root.stripped + "\u201D"
       if (root.parsedMode === "run") return "Run: " + root.stripped
+      if (root.parsedMode === "opencode") return "Ask opencode: " + root.stripped
       if (root.parsedMode === "menu") return "Open Omarchy menu and search"
       if (root.parsedMode === "apps" && root.stripped !== "" && root.gridItems.length === 0)
         return "No app matches \u2014 Enter to search Google"
@@ -491,6 +492,7 @@ Item {
     { kind: "banner", label: "Obscure", detail: "Hardly opinionated search-run bar." },
     { kind: "header", label: "Flags", detail: "" },
     { kind: "row", label: "-r <Query>", detail: "Run shell command" },
+    { kind: "row", label: "-oc <Query>", detail: "Ask opencode in a terminal" },
     { kind: "row", label: "-f <Query>", detail: "Force file search" },
     { kind: "row", label: "-d <Query>", detail: "Directory search" },
     { kind: "row", label: "-a <Query>", detail: "App launcher" },
@@ -1200,6 +1202,17 @@ Item {
       // the card open; the identical second Enter (runShell below) executes.
       if (!root.runShell(q)) return
       root._opening = true
+      root.close()
+      break
+    }
+    // Query-type flag (single-mode by design — NOT in requestModeMap, like -r
+    // the user must pick the programs deliberately). The terminal gets the
+    // query as ONE argv element through xdg-terminal-exec's `exec "$@"`, so no
+    // shell quoting is needed: spaces/quotes/$() reach opencode verbatim.
+    case "opencode": {
+      if (!q) return
+      root._opening = true
+      Quickshell.execDetached(["omarchy", "launch", "terminal", "opencode", "--prompt", q])
       root.close()
       break
     }

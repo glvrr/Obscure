@@ -96,6 +96,7 @@ omarchy plugin remove glvr.ninja.obscure
 | `-a` | app search |
 | `-o` | Omarchy menu |
 | `-r` | run shell command |
+| `-oc` | ask opencode in a terminal |
 | `-g` | Google |
 | `-p` | Pinterest |
 | `-i` | Google Images |
@@ -108,7 +109,7 @@ omarchy plugin remove glvr.ninja.obscure
 
 > Multiple request flags stack: `-g -p cats` opens Google **and** Pinterest from
 > one query. View flags (`-a`, `-f`, `-d`) don't stack — the first one wins as
-> the display mode.
+> the display mode. Query-type flags (`-r`, `-oc`) never stack either.
 
 - **Chips** — confirmed flags render as pills inside the query line
   (`[google] cats`). Backspace at position 0 pops them one at a time; the field
