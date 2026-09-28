@@ -654,7 +654,7 @@ Item {
   // users can reach Close directly with the tab chain (vertical walk treats
   // the row as a single unit).
   function settingsTab(dir) {
-    var n = 14 // toggles x7 + dropdowns x3 + 2 text fields + Apply + Close
+    var n = 14 // toggles x7 + segmented rows x3 + 2 text fields + Apply + Close
     root.settingsIndex = (root.settingsIndex + dir + n) % n
   }
 
@@ -669,15 +669,15 @@ Item {
       return
     }
     if (root.settingsIndex === 2) {
-      root.draftAppsView = root.dropdownStep(appsViewDropdown.options, root.draftAppsView, dir)
+      root.draftAppsView = root.dropdownStep(appsViewToggle.options, root.draftAppsView, dir)
       return
     }
     if (root.settingsIndex === 4) {
-      root.draftDefaultMode = root.dropdownStep(defaultModeDropdown.options, root.draftDefaultMode, dir)
+      root.draftDefaultMode = root.dropdownStep(defaultModeToggle.options, root.draftDefaultMode, dir)
       return
     }
     if (root.settingsIndex === 7) {
-      root.draftRunTarget = root.dropdownStep(runModeDropdown.options, root.draftRunTarget, dir)
+      root.draftRunTarget = root.dropdownStep(runModeToggle.options, root.draftRunTarget, dir)
       return
     }
     // Toggle rows flip like Enter; anything else is a no-op for horizontal.
@@ -692,9 +692,10 @@ Item {
     }
   }
 
-  // Next (previous) option value of a Dropdown, wrapping around. The picker
-  // emits changed() only when its popup is used, so the keyboard path writes
-  // the draft itself and the value binding follows.
+  // Next (previous) option value of a segmented option list, wrapping around.
+  // The kit's SegmentedToggle/ButtonGroup only reports changes when a chip is
+  // clicked, so the keyboard path writes the draft itself and the value
+  // binding follows; the same step drives the Dropdown keyboard path.
   function dropdownStep(options, current, dir) {
     if (options.length === 0) return current
     var idx = 0
@@ -707,12 +708,12 @@ Item {
     switch (root.settingsIndex) {
     case 0: showOToggle.clicked(); break
     case 1: showAppsToggle.clicked(); break
-    case 2: appsViewDropdown.toggle(); break
+    case 2: root.draftAppsView = root.dropdownStep(appsViewToggle.options, root.draftAppsView, 1); break
     case 3: showFilesToggle.clicked(); break
-    case 4: defaultModeDropdown.toggle(); break
+    case 4: root.draftDefaultMode = root.dropdownStep(defaultModeToggle.options, root.draftDefaultMode, 1); break
     case 5: showHiddenToggle.clicked(); break
     case 6: animationsToggle.clicked(); break
-    case 7: runModeDropdown.toggle(); break
+    case 7: root.draftRunTarget = root.dropdownStep(runModeToggle.options, root.draftRunTarget, 1); break
     case 8: confirmRunToggle.clicked(); break
     case 9: showBarIconToggle.clicked(); break
     case 10:
@@ -1750,15 +1751,13 @@ function runCommandFor(q) {
             // Keyboard-driven panel: this own the keys whenever settings are
             // open. The cursor (settingsIndex + hasCursor) walks the controls
             // with Up/Down/j/k/Tab; Enter/Space activates the target; Esc
-            // discards and closes. While the flags editor is focused or the
-            // dropdown popup is open, keys go to them instead (blocked).
+            // discards and closes. While the editor fields are focused, keys
+            // go to them instead (blocked).
             PanelKeyCatcher {
               id: settingsKeys
               anchors.fill: parent
               focus: true
               blocked: historyField.activeFocus || defaultFlagsField.activeFocus
-                || defaultModeDropdown.popupOpen || appsViewDropdown.popupOpen
-                || runModeDropdown.popupOpen
               onMoveRequested: function(dx, dy) {
                 if (dx !== 0) root.settingsHorizontal(dx)
                 else root.settingsMove(dy)
@@ -1799,8 +1798,8 @@ function runCommandFor(q) {
                   onClicked: root.draftShowApps = !root.draftShowApps
                 }
 
-                Dropdown {
-                  id: appsViewDropdown
+                SegmentedToggle {
+                  id: appsViewToggle
                   width: parent.width
                   label: "Apps view"
                   options: [
@@ -1810,6 +1809,7 @@ function runCommandFor(q) {
                   value: root.draftAppsView
                   hasCursor: root.settingsIndex === 2
                   onHovered: function(h) { if (h) root.settingsIndex = 2 }
+                  onChipHovered: function(i, h) { if (h) root.settingsIndex = 2 }
                   onChanged: function(value) { root.draftAppsView = value }
                 }
 
@@ -1828,8 +1828,8 @@ function runCommandFor(q) {
                   width: parent.width
                 }
 
-                Dropdown {
-                  id: defaultModeDropdown
+                SegmentedToggle {
+                  id: defaultModeToggle
                   width: parent.width
                   label: "Default search mode"
                   options: [
@@ -1840,6 +1840,7 @@ function runCommandFor(q) {
                   value: root.draftDefaultMode
                   hasCursor: root.settingsIndex === 4
                   onHovered: function(h) { if (h) root.settingsIndex = 4 }
+                  onChipHovered: function(i, h) { if (h) root.settingsIndex = 4 }
                   onChanged: function(value) { root.draftDefaultMode = value }
                 }
 
@@ -1865,8 +1866,8 @@ function runCommandFor(q) {
                   onClicked: root.draftAnimations = !root.draftAnimations
                 }
 
-                Dropdown {
-                  id: runModeDropdown
+                SegmentedToggle {
+                  id: runModeToggle
                   width: parent.width
                   label: "Run -r in"
                   options: [
@@ -1876,6 +1877,7 @@ function runCommandFor(q) {
                   value: root.draftRunTarget
                   hasCursor: root.settingsIndex === 7
                   onHovered: function(h) { if (h) root.settingsIndex = 7 }
+                  onChipHovered: function(i, h) { if (h) root.settingsIndex = 7 }
                   onChanged: function(value) { root.draftRunTarget = value }
                 }
 
