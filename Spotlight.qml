@@ -1226,7 +1226,7 @@ Item {
       if (root.settingsOpen) root.settingsOpen = false
       root.runPendingCmd = ""
       root.disarmPointer()
-      Qt.callLater(function() { helpKeys.forceActiveFocus() })
+      Qt.callLater(function() { helpView.forceActiveFocus() })
     } else {
       queryField.forceActiveFocus()
     }
@@ -1248,25 +1248,6 @@ Item {
     Qt.callLater(root.ensureApps)
     Qt.callLater(iconResolver.start)
     iconResolver.indexed.connect(root.rebuildIcons)
-  }
-
-  // Panel-owned hotkeys. While the help or the settings view is up, the kit's
-  // PanelKeyCatcher owns the keyboard and only knows Esc/Enter/Tab/arrows/jk —
-  // the Ctrl combos never reach keyCatcher.onHotkey (which is the only place
-  // that turns them into onHotkey), so a second Ctrl+H looked dead. Shortcut is
-  // the one handler that sees the key no matter which item holds focus, and it
-  // is enabled ONLY while the matching panel is up: on the search line the
-  // keyCatcher keeps owning Ctrl+H / Ctrl+K exactly as before.
-  Shortcut {
-    sequence: "Ctrl+H"
-    enabled: root.opened && root.helpOpen
-    onActivated: root.exitHelp()
-  }
-
-  Shortcut {
-    sequence: "Ctrl+K"
-    enabled: root.opened && root.settingsOpen
-    onActivated: root.exitSettings()
   }
 
   Timer {
@@ -2029,74 +2010,102 @@ Item {
             anchors.left: parent.left
             anchors.right: parent.right
             height: root.helpPanelHeight
+            focus: true
 
             // Read-only help panel. Esc/Enter leave it (the card stays open);
             // Up/Down/j/k scroll the capped list; ANY text key dismisses help
             // and returns to the search line. It never dispatches the query
             // underneath, so the query (even a pending -r) stays a draft.
-            PanelKeyCatcher {
-              id: helpKeys
+            //
+            // The keys are owned HERE instead of a qs.Ui PanelKeyCatcher, and
+            // that is deliberate: the catcher classifies Ctrl+letter as a plain
+            // text key (its length-1 text branch sets no event.accepted), so
+            // Ctrl+H dismissed help and then bubbled on to keyCatcher — which
+            // read the very same press as a hotkey and toggled help straight
+            // back open. Ctrl is therefore tested FIRST below, and every key
+            // is accepted, so nothing here can leak into the search keys. The
+            // panel is read-only, so the catcher's `blocked`/TextField
+            // machinery bought nothing anyway.
+            Keys.priority: Keys.BeforeItem
+            Keys.onPressed: function(event) {
+              if (event.modifiers & Qt.ControlModifier) {
+                var cmd = Flags.ctrlCommand(event.key, true)
+                if (cmd !== "") {
+                  // Ctrl+H is the same "toggle" it was on the search line, so
+                  // it just leaves; every other hotkey leaves too and then
+                  // applies (Ctrl+2 from help still switches to APPS).
+                  root.exitHelp()
+                  if (cmd !== "help") root.onHotkey(cmd)
+                }
+                event.accepted = true
+                return
+              }
+              if (event.key === Qt.Key_Escape || event.key === Qt.Key_Return
+                  || event.key === Qt.Key_Enter || event.key === Qt.Key_Space) {
+                root.exitHelp()
+              } else if (event.key === Qt.Key_Down || event.text === "j") {
+                root.helpMove(1)
+              } else if (event.key === Qt.Key_Up || event.text === "k") {
+                root.helpMove(-1)
+              } else if (event.text && event.text.length === 1) {
+                root.exitHelp()
+              }
+              event.accepted = true
+            }
+
+            Column {
+              id: helpControlCol
               anchors.fill: parent
-              focus: true
-              onCloseRequested: root.exitHelp()
-              onActivateRequested: root.exitHelp()
-              onMoveRequested: function(dx, dy) { if (dy !== 0) root.helpMove(dy) }
-              onTextKey: function(t) { root.exitHelp() }
+              spacing: Style.spacing.xs
 
-              Column {
-                id: helpControlCol
-                anchors.fill: parent
-                spacing: Style.spacing.xs
+              PanelSectionHeader {
+                width: parent.width
+                text: "Help"
+              }
 
-                PanelSectionHeader {
-                  width: parent.width
-                  text: "Help"
-                }
+              Item {
+                id: helpListHost
+                width: parent.width
+                height: root.helpVisibleRows * root.helpRowH
+                clip: true
 
-                Item {
-                  id: helpListHost
-                  width: parent.width
-                  height: root.helpVisibleRows * root.helpRowH
+                ListView {
+                  id: helpList
+                  anchors.fill: parent
                   clip: true
-
-                  ListView {
-                    id: helpList
-                    anchors.fill: parent
-                    clip: true
-                    boundsBehavior: Flickable.StopAtBounds
-                    model: root.helpRows
-                    currentIndex: 0
-                    delegate: helpDelegate
-                  }
-
-                  Rectangle {
-                    id: helpScrollbar
-                    anchors.right: parent.right
-                    anchors.rightMargin: Style.space(2)
-                    width: Style.spacing.hairline
-                    radius: width
-                    color: Util.alpha(root.dimColor, 0.55)
-                    visible: helpList.contentHeight > helpList.height + 1
-                    height: Math.max(Style.space(24),
-                      parent.height * Math.min(1, helpList.height / helpList.contentHeight))
-                    y: (parent.height - height) * Math.max(0, Math.min(1,
-                      helpList.contentHeight > helpList.height
-                        ? helpList.contentY / (helpList.contentHeight - helpList.height)
-                        : 0))
-                  }
+                  boundsBehavior: Flickable.StopAtBounds
+                  model: root.helpRows
+                  currentIndex: 0
+                  delegate: helpDelegate
                 }
 
-                Text {
-                  width: parent.width
-                  height: Style.space(26)
-                  text: "Esc closes help  -  arrows move  -  typing returns to the search"
-                  font.family: Style.font.menuFamily
-                  font.pixelSize: Style.font.caption
-                  color: Util.alpha(root.dimColor, 0.8)
-                  horizontalAlignment: Text.AlignHCenter
-                  verticalAlignment: Text.AlignVCenter
-                  elide: Text.ElideRight
+                Rectangle {
+                  id: helpScrollbar
+                  anchors.right: parent.right
+                  anchors.rightMargin: Style.space(2)
+                  width: Style.spacing.hairline
+                  radius: width
+                  color: Util.alpha(root.dimColor, 0.55)
+                  visible: helpList.contentHeight > helpList.height + 1
+                  height: Math.max(Style.space(24),
+                    parent.height * Math.min(1, helpList.height / helpList.contentHeight))
+                  y: (parent.height - height) * Math.max(0, Math.min(1,
+                    helpList.contentHeight > helpList.height
+                      ? helpList.contentY / (helpList.contentHeight - helpList.height)
+                      : 0))
                 }
+              }
+
+              Text {
+                width: parent.width
+                height: Style.space(26)
+                text: "Esc or Ctrl+H closes  -  arrows move  -  typing returns to the search"
+                font.family: Style.font.menuFamily
+                font.pixelSize: Style.font.caption
+                color: Util.alpha(root.dimColor, 0.8)
+                horizontalAlignment: Text.AlignHCenter
+                verticalAlignment: Text.AlignVCenter
+                elide: Text.ElideRight
               }
             }
           }
