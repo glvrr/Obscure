@@ -802,7 +802,9 @@ Item {
 // the query is one argv element — no shell quoting involved). In external
 // mode an interactive shell is handed over after the command, otherwise the
 // window would close the instant bash exits and there would be nothing to
-// look at — a bare trailing newline also guards the rare "# comment" query.
+// look at. The handover is a fresh "\nexec bash" line — a stray ";" after the
+// newline would be "syntax error near unexpected token `;'" (a newline already
+// terminates the command), and "\n" also trims a rare "# comment" query tail.
 function dispatchShell(q) {
   var argv = root.runCommandFor(q)
   Quickshell.execDetached(argv)
@@ -810,7 +812,7 @@ function dispatchShell(q) {
 
 function runCommandFor(q) {
   return store.runTarget === "external"
-    ? ["omarchy", "launch", "terminal", "bash", "-lc", q + "\n; exec bash"]
+    ? ["omarchy", "launch", "terminal", "bash", "-lc", q + "\nexec bash"]
     : ["bash", "-lc", q]
 }
 
