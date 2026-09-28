@@ -14,6 +14,10 @@ function googleUrl(query) {
   return "https://www.google.com/search?q=" + encodeURIComponent(String(query || ""))
 }
 
+function chatgptUrl(query) {
+  return "https://chatgpt.com/?q=" + encodeURIComponent(String(query || ""))
+}
+
 function imagesUrl(query) {
   return "https://www.google.com/search?q=" + encodeURIComponent(String(query || "")) + "&tbm=isch"
 }

@@ -98,6 +98,7 @@ omarchy plugin remove glvr.ninja.obscure
 | `-r` | run shell command |
 | `-oc` | ask opencode in a terminal |
 | `-g` | Google |
+| `-gpt` | ask ChatGPT in the browser |
 | `-p` | Pinterest |
 | `-i` | Google Images |
 | `-as` | ArtStation |

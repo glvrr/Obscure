@@ -10,6 +10,7 @@ const MODES = {
   a: "apps",
   o: "menu",
   oc: "opencode",
+  gpt: "gpt",
   r: "run",
   "as": "artstation",
   "sf": "sketchfab",
@@ -24,11 +25,14 @@ const MODES = {
 // members. (Verified loop this back into the parsed lookup with in/own checks
 // — a mode key can never be "toString"; the regex guarantees it.)
 
-// A leading flag token. Single letters plus the whole words -as/-sf/-ddg/-da/-oc;
-// the alternation + backtracking keep unknown heads ("-af cats", "-ddu") as
-// raw text and prevent "-ddg" from being split into "-d" + raw "dg". "oc" must
-// sit BEFORE [a-z.] or "-oc" would split into "-o" (menu) + raw "c".
-const FLAG_RE = /^\s*-((?:ddg|da|as|sf|oc|[a-z.]))(?:\s+|$)/
+// A leading flag token. Single letters plus the whole words
+// -as/-sf/-ddg/-da/-oc/-gpt; the alternation + backtracking keep unknown heads
+// ("-af cats", "-ddu") as raw text and prevent "-ddg" from being split into
+// "-d" + raw "dg". First the word tokens sit before [a-z.] (or "-oc" would
+// split into "-o" (menu) + raw "c"); "gpt" also needs the even earlier spot so
+// "-gpt" isn't eaten as "-g" + raw "pt" — the (?:\s+|$) lookahead already
+// disambiguates, alternation order just keeps the match deterministic.
+const FLAG_RE = /^\s*-((?:ddg|da|as|sf|oc|gpt|[a-z.]))(?:\s+|$)/
 
 // Splits "text" into { mode, flag, query, hidden, flags }.
 // Leading `-x` tokens (x a known flag letter) select the mode, `-.` toggles
@@ -136,6 +140,7 @@ const CHIP_NAMES = {
   run: "run",
   hidden: "hidden",
   opencode: "opencode",
+  gpt: "gpt",
   "artstation": "artstation",
   "sketchfab": "sketchfab",
   youtube: "youtube",

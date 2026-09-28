@@ -85,6 +85,7 @@ TextField {
     if (root.rawMode !== "auto") {
       switch (root.rawMode) {
       case "web": return "Search Google..."
+      case "gpt": return "Ask ChatGPT..."
       case "run": return "Run a command..."
       case "opencode": return "Ask opencode..."
       case "menu": return "Search Omarchy menu..."

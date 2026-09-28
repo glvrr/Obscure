@@ -241,6 +241,7 @@ Item {
         if (mLabels.length > 0) return "Multi-search: " + mLabels.join(" + ")
       }
       if (root.parsedMode === "web") return "Search Google for \u201C" + root.stripped + "\u201D"
+      if (root.parsedMode === "gpt") return "Ask ChatGPT: " + root.stripped
       if (root.parsedMode === "pinterest") return "Search Pinterest for \u201C" + root.stripped + "\u201D"
       if (root.parsedMode === "images") return "Google Images for \u201C" + root.stripped + "\u201D"
       if (root.parsedMode === "artstation") return "Search ArtStation for \u201C" + root.stripped + "\u201D"
@@ -499,6 +500,7 @@ Item {
     { kind: "row", label: "-a <Query>", detail: "App launcher" },
     { kind: "row", label: "-o <Query>", detail: "Omarchy menu search" },
     { kind: "row", label: "-g <Query>", detail: "Google search" },
+    { kind: "row", label: "-gpt <Query>", detail: "Ask ChatGPT in the browser" },
     { kind: "row", label: "-p <Query>", detail: "Pinterest search" },
     { kind: "row", label: "-i <Query>", detail: "Google Images search" },
     { kind: "row", label: "-as <Query>", detail: "ArtStation search" },
@@ -1109,7 +1111,7 @@ function runCommandFor(q) {
   }
 
   // Flag tokens that fire an external action with the query, in typed order.
-  readonly property var requestModeMap: ({ g: "web", p: "pinterest", i: "images", "as": "artstation", "sf": "sketchfab", y: "youtube", ddg: "ddg", da: "deviantart", r: "run", o: "menu" })
+  readonly property var requestModeMap: ({ g: "web", gpt: "gpt", p: "pinterest", i: "images", "as": "artstation", "sf": "sketchfab", y: "youtube", ddg: "ddg", da: "deviantart", r: "run", o: "menu" })
 
   // True when more than one dispatch-target flag is present ("-g -p cats").
   // Independent of chips/swallowed so the hint stays correct while typing.
@@ -1117,7 +1119,7 @@ function runCommandFor(q) {
 
   // Mode -> short display label for the multi-search hint.
   readonly property var requestLabelMap: ({
-    web: "google", pinterest: "pinterest", images: "images",
+    web: "google", gpt: "chatgpt", pinterest: "pinterest", images: "images",
     artstation: "artstation", sketchfab: "sketchfab", youtube: "youtube",
     ddg: "ddg", deviantart: "deviantart", run: "run", menu: "omarchy"
   })
@@ -1137,6 +1139,7 @@ function runCommandFor(q) {
   // URL scheme only has to be registered here (mirror QueryBar.placeholderFor).
   readonly property var urlBuilders: ({
     web: Search.googleUrl,
+    gpt: Search.chatgptUrl,
     pinterest: Search.pinterestUrl,
     images: Search.imagesUrl,
     artstation: Search.artstationUrl,
@@ -1212,6 +1215,7 @@ function runCommandFor(q) {
       break
     }
     case "web":
+    case "gpt":
     case "pinterest":
     case "images":
     case "artstation":
