@@ -553,7 +553,19 @@ Item {
     // out of the requested mode into a Pinterest chip. Only the plain open
     // (no tab) gets the default flags.
     var route = String(payload.tab || "")
-    var fl = store.ready && !payload.settings && route === "" ? String(store.defaultFlags || "") : ""
+    // payload.flag prefills the LINE with a flag instead of a route — the only
+    // way to reach from a binding what a tab cannot express: a web search
+    // (-g), a run (-r), hidden files (-.), a multi request (-g -p) or any
+    // word flag (-as/-sf/-ddg/-da). It replaces the stored default flags for
+    // the same reason an explicit tab does (a standing "-p " prefill would
+    // otherwise ride along), and a non-string value is ignored rather than
+    // stringified into the query. The mode itself needs no code: with a flag
+    // in the line inApps/inFiles already resolve from parseQuery's mode.
+    var f = typeof payload.flag === "string" ? payload.flag : ""
+    var fl = f
+    if (!/\S/.test(fl) && store.ready && !payload.settings && route === "") {
+      fl = String(store.defaultFlags || "")
+    }
     if (/\S/.test(fl)) {
       fl = fl.replace(/\s+$/, "") + " "
     } else {

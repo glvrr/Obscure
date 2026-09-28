@@ -185,6 +185,25 @@ omarchy-shell shell summon glvr.ninja.obscure '{"tab":"auto"}'
 omarchy-shell shell summon glvr.ninja.obscure '{"settings":true}'
 ```
 
+`tab` covers the three screens. For everything a tab cannot express — a web
+search, a run, hidden files, a multi search — use `flag`, which prefills the
+query line exactly as if you had typed it (the flag shows up as a chip and the
+mode follows from it):
+
+```sh
+# the apps screen with a visible [apps] chip
+omarchy-shell shell summon glvr.ninja.obscure '{"flag":"-a"}'
+# a file search already carrying the query
+omarchy-shell shell summon glvr.ninja.obscure '{"flag":"-f","query":"report"}'
+# two request flags at once: nothing dispatches until you press Enter
+omarchy-shell shell summon glvr.ninja.obscure '{"flag":"-g -p","query":"cats"}'
+# the apps grid pre-filtered, Enter launches the highlighted one
+omarchy-shell shell summon glvr.ninja.obscure '{"flag":"-a","query":"firefox"}'
+```
+
+A non-empty `flag` replaces the *Default search flags* setting for that open,
+just like an explicit `tab` does.
+
 ## Under the hood
 
 | File | Role |
