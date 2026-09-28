@@ -1809,7 +1809,6 @@ function runCommandFor(q) {
                   value: root.draftAppsView
                   hasCursor: root.settingsIndex === 2
                   onHovered: function(h) { if (h) root.settingsIndex = 2 }
-                  onChipHovered: function(i, h) { if (h) root.settingsIndex = 2 }
                   onChanged: function(value) { root.draftAppsView = value }
                 }
 
@@ -1840,7 +1839,6 @@ function runCommandFor(q) {
                   value: root.draftDefaultMode
                   hasCursor: root.settingsIndex === 4
                   onHovered: function(h) { if (h) root.settingsIndex = 4 }
-                  onChipHovered: function(i, h) { if (h) root.settingsIndex = 4 }
                   onChanged: function(value) { root.draftDefaultMode = value }
                 }
 
@@ -1877,7 +1875,6 @@ function runCommandFor(q) {
                   value: root.draftRunTarget
                   hasCursor: root.settingsIndex === 7
                   onHovered: function(h) { if (h) root.settingsIndex = 7 }
-                  onChipHovered: function(i, h) { if (h) root.settingsIndex = 7 }
                   onChanged: function(value) { root.draftRunTarget = value }
                 }
 

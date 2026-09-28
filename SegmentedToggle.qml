@@ -9,6 +9,12 @@ import qs.Ui
 // PanelKeyCatcher, and this control keeps whatever the caller feeds into
 // `value`; the settings keyboard steps the draft with Left/Right/Enter and
 // the chips just mirror it (same contract as the Dropdown's keyboard path).
+//
+// No cursorIndex on the group: chips already light themselves through their
+// internal hover MouseArea, and a keyboard-driven cursorIndex chasing the
+// selected chip made the row "blink" while stepping — the hover fill overrode
+// the selected fill and jumped between chips on every keystroke. The selected
+// chip carries the selected fill, the row carries the panel cursor chrome.
 BorderSurface {
   id: root
 
@@ -17,9 +23,7 @@ BorderSurface {
   property var options: []
   property string value: ""
   // Panel-cursor flag, same role as Toggle.hasCursor: the settings keyboard
-  // binds this to settingsIndex and the row gets the hover-cursor chrome; a
-  // lit chip follows — the selected option by default, the hovered chip while
-  // the pointer is over it.
+  // binds this to settingsIndex and the row gets the hover-cursor chrome.
   property bool hasCursor: false
 
   property color foreground: Color.foreground
@@ -30,10 +34,7 @@ BorderSurface {
 
   signal changed(string value)
   signal hovered(bool isHovered)
-  signal chipHovered(int index, bool isHovered)
 
-  // Which chip the panel cursor stands on: -1 = let the selected option rule.
-  property int _chip: -1
   property bool _hovered: false
 
   implicitHeight: Math.max(54, content.implicitHeight + Style.spacing.huge)
@@ -91,9 +92,7 @@ BorderSurface {
       value: root.value
       focusable: false
       anchors.verticalCenter: parent.verticalCenter
-      cursorIndex: root.hasCursor ? (root._chip >= 0 ? root._chip : group.selectedOptionIndex()) : -1
       onChanged: function(v) { root.changed(v) }
-      onHovered: function(index, h) { root._chip = h ? index : -1; root.chipHovered(index, h) }
     }
   }
 
