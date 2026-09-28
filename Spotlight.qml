@@ -796,20 +796,23 @@ Item {
     return true
   }
 
-  // The -r / Ctrl+0 delivery channel, honouring the runTarget setting:
-  // "silent" runs bash in the background, "external" opens a terminal so the
-  // command + its output are visible (same terminal path as -oc, and like it
-  // the query is one argv element — no shell quoting involved).
-  function dispatchShell(q) {
-    var argv = root.runCommandFor(q)
-    Quickshell.execDetached(argv)
-  }
+// The -r / Ctrl+0 delivery channel, honouring the runTarget setting:
+// "silent" runs bash in the background, "external" opens a terminal so the
+// command + its output are visible (same terminal path as -oc, and like it
+// the query is one argv element — no shell quoting involved). In external
+// mode an interactive shell is handed over after the command, otherwise the
+// window would close the instant bash exits and there would be nothing to
+// look at — a bare trailing newline also guards the rare "# comment" query.
+function dispatchShell(q) {
+  var argv = root.runCommandFor(q)
+  Quickshell.execDetached(argv)
+}
 
-  function runCommandFor(q) {
-    return store.runTarget === "external"
-      ? ["omarchy", "launch", "terminal", "bash", "-lc", q]
-      : ["bash", "-lc", q]
-  }
+function runCommandFor(q) {
+  return store.runTarget === "external"
+    ? ["omarchy", "launch", "terminal", "bash", "-lc", q + "\n; exec bash"]
+    : ["bash", "-lc", q]
+}
 
   // CTRL+S: remember the current flag chips (or their absence) as the default
   // prefill for future opens. The prefix only ever contains REAL chip tokens

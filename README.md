@@ -160,7 +160,9 @@ Open with `Ctrl+K` inside the card, or **right-click** the bar icon.
   makes everything instant.
 - Run `-r` in — where a shell command runs: **Silent** (bash in the background,
   nothing visible, the default) or **External terminal** (the command runs in
-  your system terminal via `omarchy launch terminal`, same channel as `-oc`).
+  your system terminal via `omarchy launch terminal`, same channel as `-oc`;
+  an interactive shell is left behind after the command so the window survives
+  and you can inspect output — close it with `exit`/`Ctrl+D` when done).
 - Shell command warning — on by default: running a command via `-r` / `Ctrl+0`
   needs a second Enter (a flash in the hint line asks to confirm); off runs it
   instantly. Applies in both run modes.
