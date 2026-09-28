@@ -99,8 +99,11 @@ TextField {
       case "deviantart": return "Search DeviantArt..."
       }
     }
-    if (root.tabMode === "files") return "Search files...  (-f file  -d dir  -g web  -p pinterest  -i images  -as artstation  -sf sketchfab  -y youtube  -ddg duckduckgo  -da deviantart  -r run  -. hidden)"
-    return "Obscure...  (-f file  -d dir  -g web  -p pinterest  -i images  -a apps  -o menu  -as artstation  -sf sketchfab  -y youtube  -ddg duckduckgo  -da deviantart  -r run  -. hidden)"
+    // The flag list used to live here as a parenthetical; it was long enough
+    // to push the line out of view and it is documented in the help page
+    // anyway (Ctrl+H), so the placeholder just points there.
+    if (root.tabMode === "files") return "Search files...  CTRL+H for help..."
+    return "Obscure...  CTRL+H for help..."
   }
 
   // ---- inline autocomplete ----
