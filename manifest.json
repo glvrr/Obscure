@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "glvr.ninja.obscure",
   "name": "Obscure",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "author": "glvr",
   "license": "MIT",
   "description": "Obscure — spotlight-style launcher for Omarchy: apps, files, directories, and smart search.",
@@ -18,7 +18,8 @@
     "displayName": "Obscure",
     "description": "Toggle the Obscure launcher",
     "category": "System",
-    "allowMultiple": false
+    "allowMultiple": false,
+    "defaultSection": "left"
   },
   "keepLoaded": true
 }

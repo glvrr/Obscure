@@ -26,9 +26,9 @@ omarchy plugin add https://github.com/glvrr/Obscure --enable
 ```
 
 The installer clones into `~/.config/omarchy/plugins/glvr.ninja.obscure`,
-validates the manifest, rescans the shell and — because this plugin is both a
-`menu` and a `bar-widget` — asks which bar section the magnifier icon should go
-into. For a scripted install (no prompts, non-interactive shells):
+validates the manifest and rescans the shell; the bar section comes from the
+manifest (`barWidget.defaultSection: left`). For a scripted install (no
+prompts, non-interactive shells):
 
 ```sh
 omarchy plugin add https://github.com/glvrr/Obscure --enable --yes
@@ -101,6 +101,7 @@ omarchy plugin remove glvr.ninja.obscure
 | `-p` | Pinterest |
 | `-i` | Google Images |
 | `-y` | YouTube |
+| `-gpt`, `-as`, `-sf`, `-ddg`, `-da` | configurable web flags (seeded via `obscure.flags.json`, see below) |
 | `-.` | show hidden files |
 
 > The web flags are **configurable**: `-gpt`, `-as`, `-sf`, `-ddg` and `-da`
@@ -110,7 +111,8 @@ omarchy plugin remove glvr.ninja.obscure
 
 > Multiple request flags stack: `-g -p cats` opens Google **and** Pinterest from
 > one query. View flags (`-a`, `-f`, `-d`) don't stack — the first one wins as
-> the display mode. Query-type flags (`-r`, `-oc`) never stack either.
+> the display mode. `-oc` never stacks (single mode by design); `-r` can join a
+> request batch (`-g -r cats` runs the command and opens Google).
 
 - **Chips** — confirmed flags render as pills inside the query line
   (`[google] cats`). Backspace at position 0 pops them one at a time; the field
@@ -185,9 +187,12 @@ Open with `Ctrl+K` inside the card, or **right-click** the bar icon.
   `~/.local/state/obscure/history.json` and survives restarts.
 - Default search flags — text prefilled into the query line on every open; they
   behave exactly like typed flags, backspace-poppable included.
-- Config file — **Edit config** opens `~/.config/omarchy/obscure.flags.json` in
-  the configured editor; **Reload flags** re-reads it live (no shell restart),
-  so a hand-edited web flag appears in chips/placeholders instantly.
+- Config file — a labelled settings row (same chrome as the toggles around it):
+  **Edit config** opens `~/.config/omarchy/obscure.flags.json` in the configured
+  editor (creating it when it does not exist yet), **Reload flags** re-reads it
+  live (no shell restart), so a hand-edited web flag appears in
+  chips/placeholders instantly. On the keyboard the row is one target:
+  `Left`/`Right` switch Edit ↔ Reload, `Enter` fires the lit one.
 
 Persisted to `~/.config/omarchy/obscure.json` (the web-flag definitions live in
 `~/.config/omarchy/obscure.flags.json`, the resend list in
@@ -195,11 +200,15 @@ Persisted to `~/.config/omarchy/obscure.json` (the web-flag definitions live in
 
 ## Custom search flags
 
-The browser-dispatch flags (`-g`, `-p`, `-i`, `-y`, `-gpt`, `-as`, `-sf`,
-`-ddg`, `-da`) come from a live registry: the built-in defaults merged with
-`~/.config/omarchy/obscure.flags.json`, the file winning per token. That file
-is seeded on install with `gpt`/`as`/`sf`/`ddg`/`da`; edit it to rename, rebind
-or drop them, or to add brand-new flags.
+The browser-dispatch flags (`-g`, `-p`, `-i`, `-y` built-ins plus anything the
+file defines) come from a live registry: the built-in defaults merged with
+`~/.config/omarchy/obscure.flags.json`, the file winning per token. The four
+built-ins work out of the box; the file is **optional** and never created
+automatically — on a machine without it the registry is just `-g`/`-p`/`-i`/`-y`.
+Add the familiar defaults (`gpt`/`as`/`sf`/`ddg`/`da`) or your own flags by
+creating the file — the settings panel's **Edit config** opens the path even
+when it is missing (save the template below), then **Reload flags** picks it up
+without a restart:
 
 ```json
 {
@@ -290,6 +299,9 @@ flag's parsed mode is what the card shows); a non-string `flag` is ignored.
 | `FileSearch.qml` | `fd`-backed file / directory search |
 | `HistoryStore.qml` | query history (`~/.local/state/obscure/history.json`) |
 | `SettingsStore.qml` | settings (`~/.config/omarchy/obscure.json`) |
+| `FlagsConfig.qml` | user web-flag registry (`~/.config/omarchy/obscure.flags.json`) |
+| `SegmentedToggle.qml` | settings form-row control (Apps view, mode, run target) |
+| `Search.js` | auto-mode routing + `{q}` URL templating for registry flags |
 | `open-file.sh` | opener used for file results |
 
 The plugin hot-reloads on save; a full shell restart guarantees a clean reload:
