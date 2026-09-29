@@ -98,15 +98,15 @@ omarchy plugin remove glvr.ninja.obscure
 | `-r` | run shell command |
 | `-oc` | ask opencode in a terminal |
 | `-g` | Google |
-| `-gpt` | ask ChatGPT in the browser |
 | `-p` | Pinterest |
 | `-i` | Google Images |
-| `-as` | ArtStation |
-| `-sf` | Sketchfab |
 | `-y` | YouTube |
-| `-ddg` | DuckDuckGo |
-| `-da` | DeviantArt |
 | `-.` | show hidden files |
+
+> The web flags are **configurable**: `-gpt`, `-as`, `-sf`, `-ddg` and `-da`
+> ship as defaults from `~/.config/omarchy/obscure.flags.json`, and any web
+> flag (built-ins included) can be rebound or renamed there — even `-g` to a
+> different engine. See [Custom search flags](#custom-search-flags).
 
 > Multiple request flags stack: `-g -p cats` opens Google **and** Pinterest from
 > one query. View flags (`-a`, `-f`, `-d`) don't stack — the first one wins as
@@ -185,9 +185,50 @@ Open with `Ctrl+K` inside the card, or **right-click** the bar icon.
   `~/.local/state/obscure/history.json` and survives restarts.
 - Default search flags — text prefilled into the query line on every open; they
   behave exactly like typed flags, backspace-poppable included.
+- Config file — **Edit config** opens `~/.config/omarchy/obscure.flags.json` in
+  the configured editor; **Reload flags** re-reads it live (no shell restart),
+  so a hand-edited web flag appears in chips/placeholders instantly.
 
-Persisted to `~/.config/omarchy/obscure.json` (the resend list is separate:
+Persisted to `~/.config/omarchy/obscure.json` (the web-flag definitions live in
+`~/.config/omarchy/obscure.flags.json`, the resend list in
 `~/.local/state/obscure/history.json`).
+
+## Custom search flags
+
+The browser-dispatch flags (`-g`, `-p`, `-i`, `-y`, `-gpt`, `-as`, `-sf`,
+`-ddg`, `-da`) come from a live registry: the built-in defaults merged with
+`~/.config/omarchy/obscure.flags.json`, the file winning per token. That file
+is seeded on install with `gpt`/`as`/`sf`/`ddg`/`da`; edit it to rename, rebind
+or drop them, or to add brand-new flags.
+
+```json
+{
+  "flags": [
+    { "token": "gpt", "label": "ChatGPT", "url": "https://chatgpt.com/?q={q}",
+      "placeholder": "Ask ChatGPT...", "hint": "Ask ChatGPT: {q}", "detail": "Ask ChatGPT in the browser" },
+    { "token": "ec", "label": "Ecosia", "url": "https://www.ecosia.org/search?q={q}" }
+  ]
+}
+```
+
+- `token` — 1..4 lowercase letters. Rebinding a built-in web flag keeps its
+  mode but overrides its URL **and** label (a `-g` chip shows the new engine's
+  name). A brand-new token is its own mode (`-ec cats` → Ecosia).
+- `url` — `http(s)://` template; the `{q}` hole is the encoded query. Entries
+  without a URL or a `{q}` hole are skipped.
+- `label` — required; shown on the chip, placeholder and hints.
+- `placeholder` / `hint` / `detail` — optional; defaults derive from `label`
+  (literally `Search <label>...` and `Search <label> for "…"` texts, and a
+  `<label> search` help entry).
+- Built-in non-web flags (`-r -o -a -f -d -oc -.-`) are **reserved** and can't
+  be overridden; an entry that would hijack a built-in mode is ignored. Invalid
+  entries are skipped one at a time, so a typo never blanks the whole file.
+- Removing a flag's entry removes the flag: its head returns to raw text, the
+  chip stops appearing, and a stale default-flags prefill containing it is
+  cleaned up on open.
+
+Opened/edited from the settings panel (**Edit config**), reloaded in place with
+**Reload flags** (also applied automatically on every shell start).
 
 ## Open modes (summon payload)
 

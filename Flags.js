@@ -1,6 +1,13 @@
 // Query-line parser and text ranking helpers for the spotlight.
+// A shared .pragma library singleton: Spotlight registers the user-defined
+// web flags (the merged obscure.flags.json registry) through setExtra(), and
+// QueryBar's parseQuery sees the very same instance — one source of truth.
 .pragma library
 
+// Built-in single-letter flags plus the word flag -oc (opencode). The web
+// word flags (-gpt/-as/-sf/-ddg/-da) are NOT here: they live in the user's
+// obscure.flags.json and arrive through setExtra(), so a removed entry means
+// the head is no longer a real flag ("-gpt cats" returns to raw text).
 const MODES = {
   f: "files",
   d: "dirs",
@@ -10,29 +17,76 @@ const MODES = {
   a: "apps",
   o: "menu",
   oc: "opencode",
-  gpt: "gpt",
   r: "run",
-  "as": "artstation",
-  "sf": "sketchfab",
-  y: "youtube",
-  ddg: "ddg",
-  da: "deviantart"
+  y: "youtube"
 }
 
 // Object-literal prototypes expose broken "toString"/"constructor" keys, but
 // they are unreachable here: parseQuery only ever hands us one-letter tokens
-// or the explicit -as/-sf/-ddg/-da/-oc words, none of which collide with object
-// members. (Verified loop this back into the parsed lookup with in/own checks
-// — a mode key can never be "toString"; the regex guarantees it.)
+// or the explicit -oc word, none of which collide with object members.
+// (Verified loop this back into the parsed lookup with in/own checks — a mode
+// key can never be "toString"; the regex guarantees it.)
 
-// A leading flag token. Single letters plus the whole words
-// -as/-sf/-ddg/-da/-oc/-gpt; the alternation + backtracking keep unknown heads
-// ("-af cats", "-ddu") as raw text and prevent "-ddg" from being split into
-// "-d" + raw "dg". First the word tokens sit before [a-z.] (or "-oc" would
-// split into "-o" (menu) + raw "c"); "gpt" also needs the even earlier spot so
-// "-gpt" isn't eaten as "-g" + raw "pt" — the (?:\s+|$) lookahead already
-// disambiguates, alternation order just keeps the match deterministic.
-const FLAG_RE = /^\s*-((?:ddg|da|as|sf|oc|gpt|[a-z.]))(?:\s+|$)/
+// ---- user-defined web flags ----
+// token -> { mode, label }, filled by setExtra() with the merged registry
+// (built-in defaults + obscure.flags.json, the file winning). The label also
+// feeds the chips and the multi-search hint, so an overridden -g shows the
+// user's own name, not "google".
+var _extra = {}
+var _extraWords = []
+var _re = null
+
+function hasOwn(map, k) {
+  return Object.prototype.hasOwnProperty.call(map || {}, k)
+}
+
+// Replace the extra registry wholesale. Called once at startup and again on
+// every "Reload flags" in the settings panel; re-parses are cheap.
+function setExtra(map) {
+  _extra = map || {}
+  _extraWords = []
+  for (var t in _extra) {
+    if (!hasOwn(_extra, t)) continue
+    if (t.length > 1) _extraWords.push(t)
+  }
+  _extraWords.sort()
+  _re = null
+}
+
+function wordTokens() {
+  var w = ["oc"]
+  for (var i = 0; i < _extraWords.length; i++) w.push(_extraWords[i])
+  return w.sort()
+}
+
+// A leading flag token. Single letters ([a-z.]) plus the whole words -oc and
+// every config-registered word flag; the alternation + backtracking keep
+// unknown heads ("-af cats", "-ddu", a removed "-gpt") as raw text and prevent
+// "-ddg" from being split into "-d" + raw "dg". Word tokens MUST sit before
+// [a-z.] (or "-oc" would split into "-o" (menu) + raw "c"); the (?:\s+|$)
+// lookahead disambiguates and alternation order keeps the match deterministic.
+// The regex is rebuilt when the registry changes so a freshly configured word
+// flag lands ahead of the single-letter class too.
+function tokenReg() {
+  if (!_re) {
+    var words = wordTokens().join("|")
+    _re = new RegExp("^\\s*-((?:" + words + "|[a-z.]))(?:\\s+|$)")
+  }
+  return _re
+}
+
+// Effective mode of a flag token: the built-in table first, then the user
+// registry (both the custom flags and overridden built-ins, whose labels/URLs
+// came from the file but whose mode stays the built-in one).
+function modeFor(token) {
+  if (MODES[token]) return MODES[token]
+  if (hasOwn(_extra, token)) return _extra[token].mode
+  return ""
+}
+
+function isKnown(token) {
+  return !!MODES[token] || hasOwn(_extra, token)
+}
 
 // Splits "text" into { mode, flag, query, hidden, flags }.
 // Leading `-x` tokens (x a known flag letter) select the mode, `-.` toggles
@@ -45,8 +99,8 @@ function parseQuery(text) {
   var flags = []
   var hidden = false
   var m
-  // See FLAG_RE above; it also drives chip/prefix alignment in prefix().
-  var re = FLAG_RE
+  // See tokenReg() above; it also drives chip/prefix alignment in prefix().
+  var re = tokenReg()
   while ((m = re.exec(raw))) {
     var token = m[1]
     if (token === ".") {
@@ -54,7 +108,7 @@ function parseQuery(text) {
       raw = raw.replace(m[0], "").trim()
       continue
     }
-    if (MODES[token]) {
+    if (isKnown(token)) {
       if (flag === "") flag = token
       if (flags.indexOf(token) < 0) flags.push(token)
       raw = raw.replace(m[0], "").trim()
@@ -62,7 +116,7 @@ function parseQuery(text) {
     }
     break
   }
-  return { mode: flag ? MODES[flag] : "auto", flag: flag, query: raw.trim(), hidden: hidden, flags: flags }
+  return { mode: flag ? modeFor(flag) : "auto", flag: flag, query: raw.trim(), hidden: hidden, flags: flags }
 }
 
 // Ctrl-key dispatch for in-card hotkeys (Qt key codes == ASCII). Returns a
@@ -103,16 +157,16 @@ function score(text, query) {
 // query character into the prefix ("-p cat " -> "-p c") and duplicate it.
 // Only REAL chip tokens (a known flag letter/word or "-.") are consumed: an
 // invalid head ("-s", "-ss", "-af") is query text and must stay in the editable
-// part. FLAG_RE would happily slurp a bare "-s" at the end of the string, which
-// used to hide it behind the chip row as invisible, uneditable text.
+// part. tokenReg() would happily slurp a bare "-s" at the end of the string,
+// which used to hide it behind the chip row as invisible, uneditable text.
 function prefix(raw, parsed) {
   if (!parsed) parsed = parseQuery(raw)
   var s = String(raw || "")
-  var re = FLAG_RE
+  var re = tokenReg()
   var n = 0
   var m
   while ((m = re.exec(s.slice(n)))) {
-    if (m[1] !== "." && !MODES[m[1]]) break
+    if (m[1] !== "." && !isKnown(m[1])) break
     n += m[0].length
   }
   return s.slice(0, n)
@@ -140,12 +194,15 @@ const CHIP_NAMES = {
   run: "run",
   hidden: "hidden",
   opencode: "opencode",
-  gpt: "gpt",
-  "artstation": "artstation",
-  "sketchfab": "sketchfab",
-  youtube: "youtube",
-  ddg: "ddg",
-  deviantart: "deviantart"
+  youtube: "youtube"
+}
+
+// Chip label for a flag token: the user registry wins (custom labels, e.g. an
+// overridden -g showing "Ecosia"), the built-in table maps the rest.
+function chipLabelFor(token) {
+  if (hasOwn(_extra, token)) return _extra[token].label
+  var mode = MODES[token]
+  return mode && CHIP_NAMES[mode] ? CHIP_NAMES[mode] : ""
 }
 
 // Full-name labels for the confirmed leading flags, in typed order.
@@ -161,8 +218,8 @@ function chipLabels(raw, parsed) {
       labels.push("hidden")
       continue
     }
-    var mode = MODES[t.substring(1)]
-    if (mode && CHIP_NAMES[mode]) labels.push(CHIP_NAMES[mode])
+    var l = chipLabelFor(t.substring(1))
+    if (l) labels.push(l)
   }
   return labels
 }

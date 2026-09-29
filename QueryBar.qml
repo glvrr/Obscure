@@ -20,6 +20,10 @@ TextField {
   // True when the parent sees multiple dispatch-target flags; the placeholder
   // then advertises the combo instead of the first flag's label.
   property bool multiRequest: false
+  // mode -> placeholder text for every web mode, supplied by Spotlight's live
+  // flag registry. Read first so an overridden or user-defined flag shows its
+  // own name instead of the hardcoded switch below.
+  property var customPlaceholder: ({})
   readonly property var parsed: Flags.parseQuery(root.text)
   readonly property string flag: root.parsed.flag
   readonly property string stripped: root.parsed.query
@@ -83,22 +87,17 @@ TextField {
   function placeholderFor() {
     if (root.multiRequest) return "Multi-search..."
     if (root.rawMode !== "auto") {
+      // Every web mode (built-in or config) lands here first; the switch below
+      // keeps the non-web modes (run/opencode/menu/dirs/files/apps).
+      var cp = root.customPlaceholder[root.rawMode]
+      if (cp) return cp
       switch (root.rawMode) {
-      case "web": return "Search Google..."
-      case "gpt": return "Ask ChatGPT..."
       case "run": return "Run a command..."
       case "opencode": return "Ask opencode..."
       case "menu": return "Search Omarchy menu..."
       case "dirs": return "Search directories..."
       case "files": return "Search files..."
       case "apps": return "Search apps..."
-      case "pinterest": return "Search Pinterest..."
-      case "images": return "Google Images..."
-      case "artstation": return "Search ArtStation..."
-      case "sketchfab": return "Search Sketchfab..."
-      case "youtube": return "Search YouTube..."
-      case "ddg": return "Search DuckDuckGo..."
-      case "deviantart": return "Search DeviantArt..."
       }
     }
     // The flag list used to live here as a parenthetical; it was long enough

@@ -85,6 +85,10 @@ Item {
   // History cap as free text while editing ("0" .. "200"), parsed on Apply.
   property string draftHistory: "10"
   property string draftDefaultFlags: ""
+  // Config-file row target: "edit" (open the flags file in the editor) or
+  // "reload" (re-read it live). Switched with Left/Right on the row, like the
+  // Apply/Close pair below it.
+  property string draftConfigAction: "edit"
   // Keyboard cursor over the settings controls (see settingsKeys).
   property int settingsIndex: 0
   // Transient confirmation shown in the hint line after CTRL+S saves the
@@ -250,15 +254,11 @@ Item {
         var mLabels = root.requestLabels()
         if (mLabels.length > 0) return "Multi-search: " + mLabels.join(" + ")
       }
-      if (root.parsedMode === "web") return "Search Google for \u201C" + root.stripped + "\u201D"
-      if (root.parsedMode === "gpt") return "Ask ChatGPT: " + root.stripped
-      if (root.parsedMode === "pinterest") return "Search Pinterest for \u201C" + root.stripped + "\u201D"
-      if (root.parsedMode === "images") return "Google Images for \u201C" + root.stripped + "\u201D"
-      if (root.parsedMode === "artstation") return "Search ArtStation for \u201C" + root.stripped + "\u201D"
-      if (root.parsedMode === "sketchfab") return "Search Sketchfab for \u201C" + root.stripped + "\u201D"
-      if (root.parsedMode === "youtube") return "Search YouTube for \u201C" + root.stripped + "\u201D"
-      if (root.parsedMode === "ddg") return "Search DuckDuckGo for \u201C" + root.stripped + "\u201D"
-      if (root.parsedMode === "deviantart") return "Search DeviantArt for \u201C" + root.stripped + "\u201D"
+      // Web modes (built-in or user-defined) resolve through the registry's
+      // per-mode {q} hint template, so a renamed/rebound flag ("-g" -> Ecosia)
+      // and a brand-new one both say the right thing without more code here.
+      var hi = root.flagHints[root.parsedMode]
+      if (hi) return hi.replace(/\{q\}/g, root.stripped)
       if (root.parsedMode === "run") return "Run: " + root.stripped
       if (root.parsedMode === "opencode") return "Ask opencode: " + root.stripped
       if (root.parsedMode === "menu") return "Open Omarchy menu and search"
@@ -489,56 +489,20 @@ Item {
 
   // Height of the settings panel: header + 3 island toggles + separator +
   // default-mode row + show-hidden toggle + animations toggle + run-warning
-  // toggle + flags field + buttons row. Kept derived from the real content so
-  // adding/removing a row can't overflow the fixed-height card.
+  // toggle + bar-icon toggle + history field + flags field + config-file row +
+  // buttons row. Kept derived from the real content so adding/removing a row
+  // can't overflow the fixed-height card.
   readonly property int settingsPanelHeight: settingsControlCol.implicitHeight
 
   // Height of the help view: section header + row list (capped, scrolls when
   // longer) + hint footer, all derived from real content.
   readonly property int helpPanelHeight: helpControlCol.implicitHeight
 
-  // Static help content shown by the [CTRL+H] page, mirroring help_exmpl.md.
-  // Row kinds: "banner" (plugin title + tagline), "header" (section title) or
-  // "row" ("[label]" followed by what it does).
-  readonly property var helpRows: [
-    { kind: "banner", label: "Obscure", detail: "Hardly opinionated search-run bar." },
-    { kind: "header", label: "Flags", detail: "" },
-    { kind: "row", label: "-r <Query>", detail: "Run shell command" },
-    { kind: "row", label: "-oc <Query>", detail: "Ask opencode in a terminal" },
-    { kind: "row", label: "-f <Query>", detail: "Force file search" },
-    { kind: "row", label: "-d <Query>", detail: "Directory search" },
-    { kind: "row", label: "-a <Query>", detail: "App launcher" },
-    { kind: "row", label: "-o <Query>", detail: "Omarchy menu search" },
-    { kind: "row", label: "-g <Query>", detail: "Google search" },
-    { kind: "row", label: "-gpt <Query>", detail: "Ask ChatGPT in the browser" },
-    { kind: "row", label: "-p <Query>", detail: "Pinterest search" },
-    { kind: "row", label: "-i <Query>", detail: "Google Images search" },
-    { kind: "row", label: "-as <Query>", detail: "ArtStation search" },
-    { kind: "row", label: "-sf <Query>", detail: "Sketchfab search" },
-    { kind: "row", label: "-y <Query>", detail: "YouTube search" },
-    { kind: "row", label: "-ddg <Query>", detail: "DuckDuckGo search" },
-    { kind: "row", label: "-da <Query>", detail: "DeviantArt search" },
-    { kind: "row", label: "-.", detail: "Show hidden results" },
-    { kind: "header", label: "HotKeys", detail: "" },
-    { kind: "row", label: "CTRL+1", detail: "Omarchy menu" },
-    { kind: "row", label: "CTRL+2", detail: "Apps search" },
-    { kind: "row", label: "CTRL+3", detail: "Files search" },
-    { kind: "row", label: "CTRL+4", detail: "Google search" },
-    { kind: "row", label: "CTRL+5", detail: "Pinterest search" },
-    { kind: "row", label: "CTRL+6", detail: "Google Images search" },
-    { kind: "row", label: "CTRL+0", detail: "Run shell command" },
-    { kind: "row", label: "CTRL+F", detail: "Files search" },
-    { kind: "row", label: "CTRL+D", detail: "Directory search" },
-    { kind: "row", label: "CTRL+G", detail: "Google search" },
-    { kind: "row", label: "CTRL+P", detail: "Pinterest search" },
-    { kind: "row", label: "CTRL+I", detail: "Google Images search" },
-    { kind: "row", label: "CTRL+O", detail: "Omarchy menu" },
-    { kind: "row", label: "CTRL+R", detail: "Run shell command" },
-    { kind: "row", label: "CTRL+K", detail: "Settings menu" },
-    { kind: "row", label: "CTRL+S", detail: "Save current flags as default" },
-    { kind: "row", label: "CTRL+H", detail: "Help page" },
-    { kind: "row", label: "DOWN", detail: "Past queries (Enter to insert)" }
-  ]
+  // Help content shown by the [CTRL+H] page, mirroring help_exmpl.md. The web
+  // rows are NOT static: they are generated from the live flag registry in
+  // buildHelpRows() (setupFlags runs it at startup and on reload), so added or
+  // renamed web flags — and removed ones — show up on the help page too.
+  property var helpRows: []
   readonly property int helpRowH: Style.space(30)
   // Cap the visible list so the card never grows off-screen; the tail rows are
   // reached by scrolling (helpMove).
@@ -590,7 +554,12 @@ Item {
       fl = String(store.defaultFlags || "")
     }
     if (/\S/.test(fl)) {
-      fl = fl.replace(/\s+$/, "") + " "
+      // Drop heads the registry does not know (an edited file removed a word
+      // flag, or a mistyped default entry): a dead chip must never glue a
+      // literal "-gpt"/"-..." into the line. Known flags and "-." survive, and
+      // the padding keeps the first keystroke appending behind them.
+      fl = root.sanitizePrefill(fl)
+      if (fl !== "") fl = fl + " "
     } else {
       fl = ""
     }
@@ -652,29 +621,33 @@ Item {
     root.draftBarIcon = store.showBarIcon
     root.draftHistory = String(store.historyLimit)
     root.draftDefaultFlags = store.defaultFlags
+    root.draftConfigAction = "edit"
     root.settingsIndex = 0
   }
 
-  // Vertical walk (Up/Down + j/k). The bottom buttons row is ONE vertical
-  // target: Down from the last field enters it (landing on Apply), Down while
-  // inside is a no-op (nothing sits below and Down must never pick a button —
-  // switching Apply/Close is Left/Right only), Up leaves back to the field.
-  // Above the fields the walk is bounded to 0..10, no wrap.
+  // Vertical walk (Up/Down + j/k). Rows 0..11 are the fields/settings controls;
+  // 12 is the standalone Config-file row (Edit/Reload, switched with
+  // Left/Right); 13/14 are the Apply/Close buttons — ONE vertical target:
+  // Down from the last field enters it (landing on Apply), Down while inside
+  // is a no-op (nothing sits below and Down must never pick a button —
+  // switching Apply/Close is Left/Right only), Up leaves back to the Config
+  // row. Above the fields the walk is bounded to 0..11, no wrap.
   function settingsMove(dir) {
-    if (root.settingsIndex > 11) {
-      if (dir < 0) root.settingsIndex = 11
+    if (root.settingsIndex === 12) {
+      root.settingsIndex = dir < 0 ? 11 : 13
+    } else if (root.settingsIndex > 12) {
+      if (dir < 0) root.settingsIndex = 12
     } else {
       var next = root.settingsIndex + dir
-      if (next > 11) root.settingsIndex = 12
-      else root.settingsIndex = Math.max(0, next)
+      root.settingsIndex = next > 11 ? 12 : Math.max(0, next)
     }
   }
 
-  // Tab/Shift+Tab still visit EVERY control including both buttons, so keyboard
-  // users can reach Close directly with the tab chain (vertical walk treats
-  // the row as a single unit).
+  // Tab/Shift+Tab still visit EVERY control including config row and both
+  // buttons, so keyboard users can reach Close directly with the tab chain
+  // (vertical walk treats the button row as a single unit).
   function settingsTab(dir) {
-    var n = 14 // toggles x7 + segmented rows x3 + 2 text fields + Apply + Close
+    var n = 15 // toggles x7 + segmented rows x3 + history + flags + config + Apply + Close
     root.settingsIndex = (root.settingsIndex + dir + n) % n
   }
 
@@ -684,8 +657,12 @@ Item {
   // while focused).
   function settingsHorizontal(dir) {
     if (dir === 0) return
-    if (root.settingsIndex >= 12) {
-      root.settingsIndex = root.settingsIndex === 12 ? 13 : 12
+    if (root.settingsIndex >= 13) {
+      root.settingsIndex = root.settingsIndex === 13 ? 14 : 13
+      return
+    }
+    if (root.settingsIndex === 12) {
+      root.draftConfigAction = root.dropdownStep([{ value: "edit" }, { value: "reload" }], root.draftConfigAction, dir)
       return
     }
     if (root.settingsIndex === 2) {
@@ -748,8 +725,10 @@ Item {
       defaultFlagsField.cursorPosition = defaultFlagsField.text.length
       break
     case 12:
-      root.settingsApply(); break
+      root.configActivate(); break
     case 13:
+      root.settingsApply(); break
+    case 14:
       root.exitSettings(); break
     }
   }
@@ -1144,19 +1123,36 @@ function runErrorTail() {
     }
   }
 
-  // Flag tokens that fire an external action with the query, in typed order.
-  readonly property var requestModeMap: ({ g: "web", gpt: "gpt", p: "pinterest", i: "images", "as": "artstation", "sf": "sketchfab", y: "youtube", ddg: "ddg", da: "deviantart", r: "run", o: "menu" })
+  // ---- web-flag registry ----
+  // The single source of truth for every browser-dispatch flag. Rebuilt by
+  // setupFlags() at startup and on "Reload flags": built-in defaults (below)
+  // first, then the user's obscure.flags.json entries, the file winning for a
+  // given token. Everything dispatch/hint/chip/help reads draws from it.
+  readonly property var builtinWebFlags: [
+    { token: "g", mode: "web", label: "Google", url: "https://www.google.com/search?q={q}",
+      placeholder: "Search Google...", hint: "Search Google for \u201C{q}\u201D", detail: "Google search" },
+    { token: "i", mode: "images", label: "Google Images", url: "https://www.google.com/search?q={q}&tbm=isch",
+      placeholder: "Google Images...", hint: "Google Images for \u201C{q}\u201D", detail: "Google Images search" },
+    { token: "p", mode: "pinterest", label: "Pinterest", url: "https://www.pinterest.com/search/pins/?q={q}",
+      placeholder: "Search Pinterest...", hint: "Search Pinterest for \u201C{q}\u201D", detail: "Pinterest search" },
+    { token: "y", mode: "youtube", label: "YouTube", url: "https://www.youtube.com/results?search_query={q}",
+      placeholder: "Search YouTube...", hint: "Search YouTube for \u201C{q}\u201D", detail: "YouTube search" }
+  ]
+  // Merged entries in a stable order (built-ins first), each
+  // { token, mode, label, url, placeholder, hint, detail, builtin }.
+  property var flagRegistry: []
+  // mode -> URL-builder fn; token -> mode; mode -> label; mode -> placeholder;
+  // mode -> {q}-template hint. All rebuilt by setupFlags().
+  property var urlBuilders: ({})
+  property var requestModeMap: ({})
+  property var requestLabelMap: ({})
+  property var flagPlaceholders: ({})
+  property var flagHints: ({})
+  property int flagCount: 0
 
   // True when more than one dispatch-target flag is present ("-g -p cats").
   // Independent of chips/swallowed so the hint stays correct while typing.
   readonly property bool multiRequest: root.requestModes().length >= 2
-
-  // Mode -> short display label for the multi-search hint.
-  readonly property var requestLabelMap: ({
-    web: "google", gpt: "chatgpt", pinterest: "pinterest", images: "images",
-    artstation: "artstation", sketchfab: "sketchfab", youtube: "youtube",
-    ddg: "ddg", deviantart: "deviantart", run: "run", menu: "omarchy"
-  })
 
   function requestLabels() {
     var ms = root.requestModes()
@@ -1167,21 +1163,6 @@ function runErrorTail() {
     }
     return out
   }
-
-  // Mode -> URL builder for every browser-dispatch mode. Used by BOTH the
-  // single-mode runMode and the multi-flag runRequests so a new "-x" flag or
-  // URL scheme only has to be registered here (mirror QueryBar.placeholderFor).
-  readonly property var urlBuilders: ({
-    web: Search.googleUrl,
-    gpt: Search.chatgptUrl,
-    pinterest: Search.pinterestUrl,
-    images: Search.imagesUrl,
-    artstation: Search.artstationUrl,
-    sketchfab: Search.sketchfabUrl,
-    youtube: Search.youtubeUrl,
-    ddg: Search.ddgUrl,
-    deviantart: Search.deviantartUrl
-  })
 
   function webLaunch(mode, q) {
     if (q) Quickshell.execDetached(["omarchy", "launch", "browser", root.urlBuilders[mode](q)])
@@ -1195,6 +1176,146 @@ function runErrorTail() {
       if (m && out.indexOf(m) < 0) out.push(m)
     }
     return out
+  }
+
+  // Effective mode of a registry token: the web built-ins keep their own mode
+  // names even when overridden, a user-defined flag IS its own mode.
+  function defaultFlagMode(token) {
+    if (token === "g") return "web"
+    if (token === "i") return "images"
+    if (token === "p") return "pinterest"
+    if (token === "y") return "youtube"
+    return token
+  }
+
+  // Rebuild the whole web-flag registry from the built-in defaults + the user
+  // file (obscure.flags.json), file winning for a token. Called once at
+  // startup and on every "Reload flags", so a hand-edited file lands without a
+  // shell restart. Ownership rules:
+  //   - non-web flags (r/o/a/f/d/oc) are RESERVED — never overridable;
+  //   - a new token may not hijack a built-in mode (its mode is its own token);
+  //   - the four web built-ins (g/i/p/y) keep their modes but can be re-URL'd
+  //     or renamed by the file (e.g. -g -> Ecosia).
+  function setupFlags() {
+    var byToken = {}
+    var order = []
+    for (var i = 0; i < root.builtinWebFlags.length; i++) {
+      var b = root.builtinWebFlags[i]
+      byToken[b.token] = { token: b.token, mode: b.mode, label: b.label, url: b.url,
+        placeholder: b.placeholder, hint: b.hint, detail: b.detail, builtin: true }
+      order.push(b.token)
+    }
+    var owners = { g: 1, i: 1, p: 1, y: 1 }
+    var reservedModes = { web: 1, images: 1, pinterest: 1, youtube: 1,
+      files: 1, dirs: 1, apps: 1, menu: 1, run: 1, opencode: 1 }
+    var cfgs = flagsConfig.flags || []
+    for (i = 0; i < cfgs.length; i++) {
+      var c = cfgs[i]
+      if (c.token === "oc") continue
+      var mode = root.defaultFlagMode(c.token)
+      if (!owners[c.token] && reservedModes[mode]) continue
+      byToken[c.token] = { token: c.token, mode: mode, label: c.label, url: c.url,
+        placeholder: c.placeholder || ("Search " + c.label + "..."),
+        hint: c.hint || ("Search " + c.label + " for \u201C{q}\u201D"),
+        detail: c.detail || (c.label + " search"), builtin: false }
+      if (order.indexOf(c.token) < 0) order.push(c.token)
+    }
+    var ub = {}, rm = {}, rl = {}, ph = {}, hnt = {}, extra = {}
+    var reg = []
+    for (i = 0; i < order.length; i++) {
+      var e = byToken[order[i]]
+      ub[e.mode] = (function(u) { return function(qx) { return Search.templateUrl(u, qx) } })(e.url)
+      rm[e.token] = e.mode
+      rl[e.mode] = e.label
+      ph[e.mode] = e.placeholder
+      hnt[e.mode] = e.hint
+      extra[e.token] = { mode: e.mode, label: e.label }
+      reg.push(e)
+    }
+    root.urlBuilders = ub
+    // Dispatch tokens outside the web registry: -r (shell) and -o (omarchy
+    // menu) still batch with web flags ("-g -r cats"), so they keep their
+    // requestModeMap entries even though no registry row owns them.
+    rm.r = "run"
+    rm.o = "menu"
+    rl.run = "run"
+    rl.menu = "omarchy"
+    root.requestModeMap = rm
+    root.requestLabelMap = rl
+    root.flagPlaceholders = ph
+    root.flagHints = hnt
+    root.flagRegistry = reg
+    root.flagCount = reg.length
+    Flags.setExtra(extra)
+    root.helpRows = root.buildHelpRows()
+    root.debugLog("flags registry=" + root.flagCount)
+  }
+
+  // "Edit config" / "Reload flags" target behind settings index 12.
+  function configActivate() {
+    if (root.draftConfigAction === "reload") {
+      flagsConfig.reload()
+      root.setupFlags()
+      root.flashNote = "Flags reloaded: " + root.flagCount
+      flashTimer.restart()
+    } else {
+      Quickshell.execDetached(["omarchy", "launch", "config", "editor", flagsConfig.configPath])
+    }
+  }
+
+  // Drop any heads the registry does not know from a default-flag prefill, the
+  // same way chip Backspace treats them: an edited file that removed a word
+  // flag ("-gpt") or a mistyped entry never leaves a dead chip glued into the
+  // line. Known flags (and "-.") survive with the trailing space semantics of
+  // the caller unchanged.
+  function sanitizePrefill(fl) {
+    var s = String(fl || "").replace(/\s+/g, " ").trim()
+    if (s === "") return ""
+    var parsed = Flags.parseQuery(s)
+    return Flags.prefix(s, parsed).replace(/\s+$/, "").trim()
+  }
+
+  // Static non-web rows + hotkeys, with the live web-flag rows (built-ins
+  // first, then the user's file in order) sandwiched between -o and "-.". Row
+  // kinds: "banner" (plugin title + tagline), "header" (section title) or
+  // "row" ("[label]" followed by what it does).
+  function buildHelpRows() {
+    var rows = [
+      { kind: "banner", label: "Obscure", detail: "Hardly opinionated search-run bar." },
+      { kind: "header", label: "Flags", detail: "" },
+      { kind: "row", label: "-r <Query>", detail: "Run shell command" },
+      { kind: "row", label: "-oc <Query>", detail: "Ask opencode in a terminal" },
+      { kind: "row", label: "-f <Query>", detail: "Force file search" },
+      { kind: "row", label: "-d <Query>", detail: "Directory search" },
+      { kind: "row", label: "-a <Query>", detail: "App launcher" },
+      { kind: "row", label: "-o <Query>", detail: "Omarchy menu search" }
+    ]
+    var reg = root.flagRegistry || []
+    for (var i = 0; i < reg.length; i++)
+      rows.push({ kind: "row", label: "-" + reg[i].token + " <Query>", detail: reg[i].detail })
+    rows.push({ kind: "row", label: "-.", detail: "Show hidden results" })
+    rows.push({ kind: "header", label: "HotKeys", detail: "" })
+    rows.push(
+      { kind: "row", label: "CTRL+1", detail: "Omarchy menu" },
+      { kind: "row", label: "CTRL+2", detail: "Apps search" },
+      { kind: "row", label: "CTRL+3", detail: "Files search" },
+      { kind: "row", label: "CTRL+4", detail: "Google search" },
+      { kind: "row", label: "CTRL+5", detail: "Pinterest search" },
+      { kind: "row", label: "CTRL+6", detail: "Google Images search" },
+      { kind: "row", label: "CTRL+0", detail: "Run shell command" },
+      { kind: "row", label: "CTRL+F", detail: "Files search" },
+      { kind: "row", label: "CTRL+D", detail: "Directory search" },
+      { kind: "row", label: "CTRL+G", detail: "Google search" },
+      { kind: "row", label: "CTRL+P", detail: "Pinterest search" },
+      { kind: "row", label: "CTRL+I", detail: "Google Images search" },
+      { kind: "row", label: "CTRL+O", detail: "Omarchy menu" },
+      { kind: "row", label: "CTRL+R", detail: "Run shell command" },
+      { kind: "row", label: "CTRL+K", detail: "Settings menu" },
+      { kind: "row", label: "CTRL+S", detail: "Save current flags as default" },
+      { kind: "row", label: "CTRL+H", detail: "Help page" },
+      { kind: "row", label: "DOWN", detail: "Past queries (Enter to insert)" }
+    )
+    return rows
   }
 
   // Execute several external actions at once (e.g. "-g -p cats" opens Google
@@ -1255,21 +1376,6 @@ function runErrorTail() {
       root.close()
       break
     }
-    case "web":
-    case "gpt":
-    case "pinterest":
-    case "images":
-    case "artstation":
-    case "sketchfab":
-    case "youtube":
-    case "ddg":
-    case "deviantart": {
-      if (!q) return
-      root._opening = true
-      root.webLaunch(mode, q)
-      root.close()
-      break
-    }
     case "run": {
       if (!q) return
       // First Enter with the confirm gate armed only shows the flash and keeps
@@ -1298,6 +1404,17 @@ function runErrorTail() {
     }
     case "menu": {
       Quickshell.execDetached(["omarchy-shell", "shell", "toggle", "omarchy.menu", JSON.stringify({ menu: "root" })])
+      root.close()
+      break
+    }
+    default: {
+      // Any web mode — built-in or user-defined — dispatches through the
+      // registry-rebuilt urlBuilders (the legacy seeded modes included). An
+      // unknown mode with no builder is a no-op.
+      if (!root.urlBuilders[mode]) return
+      if (!q) return
+      root._opening = true
+      root.webLaunch(mode, q)
       root.close()
       break
     }
@@ -1350,6 +1467,10 @@ function runErrorTail() {
   onActiveTabChanged: if (root.opened) root.refreshResults()
   onShellChanged: if (root.shell) Qt.callLater(root.ensureApps)
   Component.onCompleted: {
+    // The web-flag registry must be live before the first query parses (chips,
+    // placeholders, dispatch, help page all read it). FlagsConfig was read
+    // blocking during construction, so setupFlags sees the whole file.
+    Qt.callLater(root.setupFlags)
     Qt.callLater(root.ensureApps)
     Qt.callLater(iconResolver.start)
     iconResolver.indexed.connect(root.rebuildIcons)
@@ -1476,6 +1597,13 @@ function runErrorTail() {
   HistoryStore {
     id: history
     limit: store.historyLimit
+  }
+
+  // User-defined web flags (obscure.flags.json). Read blocking at construction;
+  // setupFlags() below merges it with the built-in defaults at startup and on
+  // every "Reload flags" from the settings panel.
+  FlagsConfig {
+    id: flagsConfig
   }
 
   // Self-contained desktop-entry index, used when the host leaves the
@@ -1721,6 +1849,7 @@ function runErrorTail() {
               filterActive: root.filterActive
               rawMode: root.parsedMode
               multiRequest: root.multiRequest
+              customPlaceholder: root.flagPlaceholders
               leftPadding: root.filterActive
                 ? queryField.defaultLeftPadding + chipRow.width + Style.spacing.xs + Style.spacing.sm
                 : queryField.defaultLeftPadding
@@ -2061,12 +2190,12 @@ function runErrorTail() {
                     Keys.onReturnPressed: function(event) {
                       event.accepted = true
                       settingsKeys.forceActiveFocus()
-                      root.settingsIndex = 12
+                      root.settingsIndex = 13
                     }
                     Keys.onEnterPressed: function(event) {
                       event.accepted = true
                       settingsKeys.forceActiveFocus()
-                      root.settingsIndex = 12
+                      root.settingsIndex = 13
                     }
                     Keys.onEscapePressed: function(event) {
                       event.accepted = true
@@ -2112,18 +2241,59 @@ function runErrorTail() {
                   Keys.onReturnPressed: function(event) {
                     event.accepted = true
                     settingsKeys.forceActiveFocus()
-                    root.settingsIndex = 12
+                    root.settingsIndex = 13
                   }
                   Keys.onEnterPressed: function(event) {
                     event.accepted = true
                     settingsKeys.forceActiveFocus()
-                    root.settingsIndex = 12
+                    root.settingsIndex = 13
                   }
                   Keys.onEscapePressed: function(event) {
                     // First Esc drops out of the editor back to the settings
                     // cursor (the panel's own Esc then closes settings).
                     event.accepted = true
                     settingsKeys.forceActiveFocus()
+                  }
+                }
+
+                // Web flags live in a separate user-editable file
+                // (obscure.flags.json): Edit opens it in the configured editor,
+                // Reload re-reads it live (no shell restart). Keyboard: L/R
+                // step the row, Enter fires the lit button — same contract as
+                // the Apply/Close pair below.
+                Row {
+                  width: parent.width
+                  spacing: Style.spacing.md
+                  layoutDirection: Qt.RightToLeft
+
+                  Button {
+                    id: configReloadButton
+                    text: "Reload flags"
+                    hasCursor: root.settingsIndex === 12 && root.draftConfigAction === "reload"
+                    onHovered: function(h) {
+                      if (!h) return
+                      root.settingsIndex = 12
+                      root.draftConfigAction = "reload"
+                    }
+                    onClicked: {
+                      root.draftConfigAction = "reload"
+                      root.configActivate()
+                    }
+                  }
+
+                  Button {
+                    id: configEditButton
+                    text: "Edit config"
+                    hasCursor: root.settingsIndex === 12 && root.draftConfigAction === "edit"
+                    onHovered: function(h) {
+                      if (!h) return
+                      root.settingsIndex = 12
+                      root.draftConfigAction = "edit"
+                    }
+                    onClicked: {
+                      root.draftConfigAction = "edit"
+                      root.configActivate()
+                    }
                   }
                 }
 
@@ -2135,8 +2305,8 @@ function runErrorTail() {
                     id: applyButton
                     text: "Apply"
                     selected: true
-                    hasCursor: root.settingsIndex === 12
-                    onHovered: function(h) { if (h) root.settingsIndex = 12 }
+                    hasCursor: root.settingsIndex === 13
+                    onHovered: function(h) { if (h) root.settingsIndex = 13 }
                     onClicked: root.settingsApply()
 
                     // Apply is permanently emphasized via `selected`, whose
@@ -2158,8 +2328,8 @@ function runErrorTail() {
                   Button {
                     id: closeButton
                     text: "Close"
-                    hasCursor: root.settingsIndex === 13
-                    onHovered: function(h) { if (h) root.settingsIndex = 13 }
+                    hasCursor: root.settingsIndex === 14
+                    onHovered: function(h) { if (h) root.settingsIndex = 14 }
                     onClicked: root.exitSettings()
                   }
                 }

@@ -1,4 +1,4 @@
-// Fallback routing for unflagged queries (the "auto" mode) and web helpers.
+// Fallback routing for unflagged queries (the "auto" mode) and URL templating.
 .pragma library
 
 // Pick where to dispatch an Enter press when no flag was typed.
@@ -10,38 +10,9 @@ function decide(tabMode, appCount, fileCount) {
   return "web"
 }
 
-function googleUrl(query) {
-  return "https://www.google.com/search?q=" + encodeURIComponent(String(query || ""))
-}
-
-function chatgptUrl(query) {
-  return "https://chatgpt.com/?q=" + encodeURIComponent(String(query || ""))
-}
-
-function imagesUrl(query) {
-  return "https://www.google.com/search?q=" + encodeURIComponent(String(query || "")) + "&tbm=isch"
-}
-
-function pinterestUrl(query) {
-  return "https://www.pinterest.com/search/pins/?q=" + encodeURIComponent(String(query || ""))
-}
-
-function artstationUrl(query) {
-  return "https://www.artstation.com/search?query=" + encodeURIComponent(String(query || ""))
-}
-
-function sketchfabUrl(query) {
-  return "https://sketchfab.com/search?type=models&q=" + encodeURIComponent(String(query || ""))
-}
-
-function youtubeUrl(query) {
-  return "https://www.youtube.com/results?search_query=" + encodeURIComponent(String(query || ""))
-}
-
-function ddgUrl(query) {
-  return "https://duckduckgo.com/?q=" + encodeURIComponent(String(query || ""))
-}
-
-function deviantartUrl(query) {
-  return "https://www.deviantart.com/search?q=" + encodeURIComponent(String(query || ""))
+// Render a {"token","url"} web-flag template. {q} is the query, URL-encoded;
+// the whole template is validated (http(s) + a {q} hole) by FlagsConfig before
+// it ever reaches the dispatch maps.
+function templateUrl(template, query) {
+  return String(template || "").replace(/\{q\}/g, encodeURIComponent(String(query || "")))
 }
