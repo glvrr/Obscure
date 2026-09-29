@@ -101,12 +101,13 @@ omarchy plugin remove glvr.ninja.obscure
 | `-p` | Pinterest |
 | `-i` | Google Images |
 | `-y` | YouTube |
-| `-gpt`, `-as`, `-sf`, `-ddg`, `-da` | configurable web flags (seeded via `obscure.flags.json`, see below) |
+| `-git`, `-ddg` | starter web flags (the file is created with these on first run, see below) |
+| `-gpt`, `-as`, `-sf`, `-da`, … | your own web flags (add them to `obscure.flags.json`) |
 | `-.` | show hidden files |
 
-> The web flags are **configurable**: `-gpt`, `-as`, `-sf`, `-ddg` and `-da`
-> ship as defaults from `~/.config/omarchy/obscure.flags.json`, and any web
-> flag (built-ins included) can be rebound or renamed there — even `-g` to a
+> The web flags are **configurable**: `-git` and `-ddg` are written to
+> `~/.config/omarchy/obscure.flags.json` on the first run, and any web flag
+> (built-ins included) can be rebound or renamed there — even `-g` to a
 > different engine. See [Custom search flags](#custom-search-flags).
 
 > Multiple request flags stack: `-g -p cats` opens Google **and** Pinterest from
@@ -207,12 +208,13 @@ Persisted to `~/.config/omarchy/obscure.json` (the web-flag definitions live in
 The browser-dispatch flags (`-g`, `-p`, `-i`, `-y` built-ins plus anything the
 file defines) come from a live registry: the built-in defaults merged with
 `~/.config/omarchy/obscure.flags.json`, the file winning per token. The four
-built-ins work out of the box; the file is **optional** and never created
-automatically — on a machine without it the registry is just `-g`/`-p`/`-i`/`-y`.
-Add the familiar defaults (`gpt`/`as`/`sf`/`ddg`/`da`) or your own flags by
-creating the file — the settings panel's **Edit config** opens the path even
-when it is missing (save the template below), then **Reload flags** picks it up
-without a restart:
+built-ins work out of the box, and on the **first run** the file is created for
+you with a small starter set (`-git` GitHub and `-ddg` DuckDuckGo). An existing
+file is never rewritten — not even an empty one — so the seed can only ever
+happen once, on a machine that has no file at all.
+
+Edit it in the settings panel: **Edit config** opens the path, **Reload flags**
+picks the change up without a restart. Anything you like goes in there:
 
 ```json
 {

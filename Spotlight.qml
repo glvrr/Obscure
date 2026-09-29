@@ -1491,6 +1491,12 @@ function runErrorTail() {
     // The web-flag registry must be live before the first query parses (chips,
     // placeholders, dispatch, help page all read it). FlagsConfig was read
     // blocking during construction, so setupFlags sees the whole file.
+    // EXCEPT on a fresh install, where the file does not exist yet: FlagsConfig
+    // seeds it and the FileNotFound notification arrives a tick later, possibly
+    // after the callLater below has already run. Re-run setupFlags from the
+    // signal — a Connections block would miss the flip (the component is
+    // "ready" before a handler can attach).
+    flagsConfig.seeded.connect(root.setupFlags)
     Qt.callLater(root.setupFlags)
     Qt.callLater(root.ensureApps)
     Qt.callLater(iconResolver.start)

@@ -22,6 +22,10 @@ import Quickshell.Io
 // is needed on the very first open and a host of components read it at
 // construction. reload() is the manual "Reload flags" path — the watcher is
 // dead on this host.
+//
+// Fresh installs get a starter file (see seedJson): a missing file is created
+// with -git and -ddg, so the feature is not empty out of the box. An existing
+// file is never written by the plugin, not even an empty one.
 Item {
   id: root
 
@@ -34,12 +38,58 @@ Item {
   // reports them so a silently dropped flag is visible instead of just gone.
   property var dropped: []
   property bool ready: false
+  // True when the last read found no file on disk. That is the fresh-install
+  // case, not an error: it seeds the starter set below (see onMissing).
+  property bool missing: false
 
   readonly property string configPath: Quickshell.env("HOME") + "/.config/omarchy/obscure.flags.json"
 
+  // Starter set written to a FRESH install, so the flags feature is useful out
+  // of the box instead of shipping empty. Deliberately generic and minimal
+  // (only the token/label/url that are required — placeholder/hint/detail derive
+  // from the label) and deliberately NOT a copy of anyone's personal file: an
+  // existing config is never rewritten, only a missing one is created.
+  readonly property string seedJson: '{\n'
+    + '  "flags": [\n'
+    + '    { "token": "git", "label": "GitHub", "url": "https://github.com/search?q={q}" },\n'
+    + '    { "token": "ddg", "label": "DuckDuckGo", "url": "https://duckduckgo.com/?q={q}" }\n'
+    + '  ]\n'
+    + '}\n'
+
+  // Fired after a fresh-install seed, so the shell can rebuild its registry
+  // without waiting for a restart. The seed is written asynchronously relative
+  // to the caller's read, so setupFlags() at startup can run before this.
+  signal seeded()
+
   function reload() {
+    root.afterRead()
+  }
+
+  // The file is not on disk: this is a fresh install, so write the starter set
+  // and use it. Called from the FileNotFound handler, which may fire before OR
+  // after afterRead's own read — so it must be safe to run at any point, and
+  // must leave the same end state either way (that is why it applies the seed
+  // itself instead of relying on a flag the reader checks). Idempotent: the
+  // write makes the file exist, so the notification cannot loop.
+  function onMissing() {
+    root.missing = true
+    file.setText(root.seedJson)
+    // Apply the string we just wrote rather than reading it back, so the
+    // registry is correct even if the write failed (read-only config dir).
+    root.apply(root.seedJson)
+    root.seeded()
+  }
+
+  // One blocking read, then seed-or-validate. An empty read while the file is
+  // known to be missing is the fresh-install gap around the seed, and onMissing
+  // applies the starter set a moment later — do not clobber it with an empty
+  // registry in the meantime.
+  function afterRead() {
     file.reload()
-    root.apply(file.text())
+    var text = file.text()
+    if (text === "" && root.missing) return
+    root.missing = false
+    root.apply(text)
   }
 
   // Name a skipped entry for the Reload feedback: its own label when present,
@@ -97,16 +147,29 @@ Item {
   // reload() returns immediately and text() keeps serving the old snapshot until
   // the async load finishes — so the first "Reload flags" click applied stale
   // content and only the second one showed the edit. blockAllReads makes
-  // reload() block until the read completes, so apply(file.text()) right after
-  // is always fresh. The file is tiny and the read is a user action, so the
-  // blocking stutter the docs warn about does not matter here.
+  // reload() block until the read completes, so the content is always fresh.
+  // blockWrites is the same idea for the seed write, which must be on disk
+  // before the next start reads it.
   FileView {
     id: file
     path: root.configPath
+    // No background load: every read goes through afterRead()'s synchronous
+    // reload(), which is what makes the missing-file seed deterministic.
+    preload: false
     blockLoading: true
     blockAllReads: true
-    watchChanges: false
+    blockWrites: true
+    // A missing file is the expected state on a fresh install (it gets seeded
+    // below), so the stock "read failed" warning would be noise. Genuine
+    // problems still surface: a failed seed write is logged in onSaveFailed.
+    printErrors: false
+    onLoadFailed: (error) => {
+      if (error === 2) root.onMissing() // FileNotFound
+    }
+    onSaveFailed: (error) => {
+      console.warn("obscure: cannot write " + root.configPath + " (error " + error + ")")
+    }
   }
 
-  Component.onCompleted: root.apply(file.text())
+  Component.onCompleted: root.afterRead()
 }
