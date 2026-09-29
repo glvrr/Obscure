@@ -1423,7 +1423,7 @@ function runErrorTail() {
         flashTimer.restart()
         runCloseTimer.restart()
       } else {
-        root.flashNote = "Error: " + root.runErrorTail()
+        root.flashNote = "Error: " + root.runErrorTail() + " — Esc to close"
         flashTimer.stop()
       }
     }
