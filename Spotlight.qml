@@ -2446,6 +2446,24 @@ function runErrorTail() {
                     onClicked: root.exitSettings()
                   }
                 }
+
+                // Status line for actions fired from this panel (currently the
+                // Config-file Reload): the search-line hint is hidden while
+                // settings is open, so reload feedback has to land here.
+                // Visible only while a flash is active, so it costs no height
+                // otherwise (Column skips invisible children).
+                Text {
+                  visible: root.flashActive
+                  width: parent.width
+                  height: Style.space(24)
+                  text: root.flashNote
+                  font.family: Style.font.menuFamily
+                  font.pixelSize: Style.font.caption
+                  color: root._resultGood === null ? root.dimColor
+                    : root._resultGood ? Color.accent : Color.urgent
+                  horizontalAlignment: Text.AlignHCenter
+                  elide: Text.ElideRight
+                }
               }
             }
           }
