@@ -787,6 +787,7 @@ Item {
   function runShell(q) {
     if (store.confirmRun && root.runPendingCmd !== q) {
       root.runPendingCmd = q
+      root._resultGood = null
       root.flashNote = "Run in shell? Press Enter again to confirm"
       flashTimer.restart()
       return false
@@ -843,6 +844,7 @@ function runErrorTail() {
     store.defaultFlags = p
     root.draftDefaultFlags = p
     store.save()
+    root._resultGood = null
     root.flashNote = "Default flags saved: " + (p === "" ? "none" : p)
     flashTimer.restart()
   }
@@ -1149,6 +1151,9 @@ function runErrorTail() {
   property var flagPlaceholders: ({})
   property var flagHints: ({})
   property int flagCount: 0
+  // Labels of entries the last setupFlags() rejected (bad token/label/URL, or
+  // a reserved-mode hijack); "Reload flags" reports them.
+  property var flagDropped: []
 
   // True when more than one dispatch-target flag is present ("-g -p cats").
   // Independent of chips/swallowed so the hint stays correct while typing.
@@ -1208,12 +1213,18 @@ function runErrorTail() {
     var owners = { g: 1, i: 1, p: 1, y: 1 }
     var reservedModes = { web: 1, images: 1, pinterest: 1, youtube: 1,
       files: 1, dirs: 1, apps: 1, menu: 1, run: 1, opencode: 1 }
+    // Structural rejects caught by FlagsConfig, plus the reserved/hijack ones
+    // dropped here. Surfaced by "Reload flags" so a skipped entry is visible.
+    var dropped = (flagsConfig.dropped || []).slice()
     var cfgs = flagsConfig.flags || []
     for (i = 0; i < cfgs.length; i++) {
       var c = cfgs[i]
       if (c.token === "oc") continue
       var mode = root.defaultFlagMode(c.token)
-      if (!owners[c.token] && reservedModes[mode]) continue
+      if (!owners[c.token] && reservedModes[mode]) {
+        dropped.push(c.label || ("-" + c.token))
+        continue
+      }
       byToken[c.token] = { token: c.token, mode: mode, label: c.label, url: c.url,
         placeholder: c.placeholder || ("Search " + c.label + "..."),
         hint: c.hint || ("Search " + c.label + " for \u201C{q}\u201D"),
@@ -1246,6 +1257,7 @@ function runErrorTail() {
     root.flagHints = hnt
     root.flagRegistry = reg
     root.flagCount = reg.length
+    root.flagDropped = dropped
     Flags.setExtra(extra)
     root.helpRows = root.buildHelpRows()
     root.debugLog("flags registry=" + root.flagCount)
@@ -1256,7 +1268,15 @@ function runErrorTail() {
     if (root.draftConfigAction === "reload") {
       flagsConfig.reload()
       root.setupFlags()
-      root.flashNote = "Flags reloaded: " + root.flagCount
+      if (root.flagDropped.length > 0) {
+        // Name what was thrown out (by label) so a typo never vanishes
+        // silently; urgent colour, same status line the silent -r uses.
+        root._resultGood = false
+        root.flashNote = "Reloaded: Invalid (" + root.flagDropped.join(", ") + ")"
+      } else {
+        root._resultGood = true
+        root.flashNote = "Reloaded: Valid."
+      }
       flashTimer.restart()
     } else {
       Quickshell.execDetached(["omarchy", "launch", "config", "editor", flagsConfig.configPath])
@@ -1327,6 +1347,7 @@ function runErrorTail() {
   function runRequests(modes, q) {
     if (modes.indexOf("run") >= 0 && store.confirmRun && root.runPendingCmd !== q) {
       root.runPendingCmd = q
+      root._resultGood = null
       root.flashNote = "Run in shell? Press Enter again to confirm"
       flashTimer.restart()
       return
@@ -1501,7 +1522,12 @@ function runErrorTail() {
   Timer {
     id: flashTimer
     interval: 1600
-    onTriggered: root.flashNote = ""
+    // Also drop the result colour tag: once the note is gone the line must
+    // return to the plain hint colour, not stay tinted by a stale reload/run.
+    onTriggered: {
+      root.flashNote = ""
+      root._resultGood = null
+    }
   }
 
   // Success splash for a silent -r run: show "Done!" briefly, then close.

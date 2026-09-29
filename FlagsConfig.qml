@@ -29,6 +29,10 @@ Item {
 
   // Validated, in file order: { token, label, url, placeholder, hint, detail }.
   property var flags: []
+  // Human labels of the entries that were skipped by the last read (bad token,
+  // missing label, bad URL, malformed JSON). The settings "Reload flags" path
+  // reports them so a silently dropped flag is visible instead of just gone.
+  property var dropped: []
   property bool ready: false
 
   readonly property string configPath: Quickshell.env("HOME") + "/.config/omarchy/obscure.flags.json"
@@ -38,23 +42,39 @@ Item {
     root.apply(file.text())
   }
 
+  // Name a skipped entry for the Reload feedback: its own label when present,
+  // else "-token", else its position in the file.
+  function entryLabel(e, i) {
+    var l = String((e && e.label) || "").trim()
+    if (l !== "") return l
+    var t = String((e && e.token) || "").trim()
+    if (t !== "") return "-" + t
+    return "entry " + (i + 1)
+  }
+
   function apply(raw) {
+    var text = String(raw || "")
     var o = {}
-    try { o = JSON.parse(String(raw || "")) } catch (e) { o = {} }
+    var parseFailed = false
+    try { o = JSON.parse(text) } catch (e) { parseFailed = true; o = {} }
     var arr = Array.isArray(o.flags) ? o.flags : []
     var out = []
+    var dropped = []
+    // Empty/absent file is not an error (it just means "no custom flags"); a
+    // non-empty file that does not parse is worth reporting.
+    if (parseFailed && text.trim() !== "") dropped.push("(invalid JSON)")
     for (var i = 0; i < arr.length; i++) {
       var e = arr[i]
-      if (!e || typeof e !== "object") continue
+      if (!e || typeof e !== "object") { dropped.push(root.entryLabel(e, i)); continue }
       var token = String(e.token || "").toLowerCase()
       // tokens must be raw letters only: the regex alternation interpolates
       // them and the chip filter is /^-[a-z.]+$/ — anything else could inject
       // or render oddly.
-      if (!/^[a-z]{1,4}$/.test(token)) continue
+      if (!/^[a-z]{1,4}$/.test(token)) { dropped.push(root.entryLabel(e, i)); continue }
       var label = String(e.label || "").trim()
-      if (label === "") continue
+      if (label === "") { dropped.push(root.entryLabel(e, i)); continue }
       var url = String(e.url || "").trim()
-      if (!/^https?:\/\//.test(url) || url.indexOf("{q}") < 0) continue
+      if (!/^https?:\/\//.test(url) || url.indexOf("{q}") < 0) { dropped.push(root.entryLabel(e, i)); continue }
       out.push({
         token: token,
         label: label,
@@ -64,6 +84,7 @@ Item {
         detail: String(e.detail || "").trim()
       })
     }
+    root.dropped = dropped
     root.flags = out
     root.ready = true
   }

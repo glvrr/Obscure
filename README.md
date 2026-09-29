@@ -191,7 +191,11 @@ Open with `Ctrl+K` inside the card, or **right-click** the bar icon.
   **Edit config** opens `~/.config/omarchy/obscure.flags.json` in the configured
   editor (creating it when it does not exist yet), **Reload flags** re-reads it
   live (no shell restart), so a hand-edited web flag appears in
-  chips/placeholders instantly. On the keyboard the row is one target:
+  chips/placeholders instantly. Reload reports back in the status line:
+  **Reloaded: Valid.** (accent) when every entry parsed, or
+  **Reloaded: Invalid (\<labels\>)** (urgent) naming the entries that were
+  skipped (bad token/label/URL, malformed JSON, or a reserved-mode hijack). On
+  the keyboard the row is one target:
   `Left`/`Right` switch Edit ↔ Reload, `Enter` fires the lit one.
 
 Persisted to `~/.config/omarchy/obscure.json` (the web-flag definitions live in
