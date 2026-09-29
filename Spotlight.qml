@@ -2258,42 +2258,129 @@ function runErrorTail() {
 
                 // Web flags live in a separate user-editable file
                 // (obscure.flags.json): Edit opens it in the configured editor,
-                // Reload re-reads it live (no shell restart). Keyboard: L/R
-                // step the row, Enter fires the lit button — same contract as
-                // the Apply/Close pair below.
-                Row {
+                // Reload re-reads it live (no shell restart). Rendered as a
+                // labelled settings row like the toggles above (title + caption
+                // + right-aligned control) so it reads as one of the panel's
+                // controls, not a stray button pair. Keyboard: L/R step the
+                // row's action, Enter fires the lit one — same contract as the
+                // Apply/Close pair below.
+                BorderSurface {
+                  id: configFileRow
                   width: parent.width
-                  spacing: Style.spacing.md
-                  layoutDirection: Qt.RightToLeft
+                  implicitWidth: Style.space(240)
+                  radius: Style.cornerRadius
+                  implicitHeight: Math.max(54, configRowContent.implicitHeight + Style.spacing.huge)
 
-                  Button {
-                    id: configReloadButton
-                    text: "Reload flags"
-                    hasCursor: root.settingsIndex === 12 && root.draftConfigAction === "reload"
-                    onHovered: function(h) {
-                      if (!h) return
-                      root.settingsIndex = 12
-                      root.draftConfigAction = "reload"
+                  readonly property bool _hot: root.settingsIndex === 12
+                  readonly property var _borderSpec: Border.controlSpec(_hot ? "hover-cursor" : "normal", Color.foreground, Color.accent)
+
+                  color: Style.controlFill(false, _hot, Color.foreground, Color.accent)
+                  borderSpec: _borderSpec
+
+                  Behavior on color { ColorAnimation { duration: 100 } }
+
+                  Row {
+                    id: configRowContent
+                    anchors.left: parent.left
+                    anchors.right: parent.right
+                    anchors.verticalCenter: parent.verticalCenter
+                    anchors.leftMargin: configFileRow.borderLeft + Style.spacing.rowPaddingX
+                    anchors.rightMargin: configFileRow.borderRight + Style.spacing.rowPaddingX
+                    spacing: Style.spacing.rowPaddingX
+
+                    Column {
+                      width: parent.width - configRowBtns.width - parent.spacing
+                      spacing: Style.spacing.xs
+                      anchors.verticalCenter: parent.verticalCenter
+
+                      Text {
+                        textFormat: Text.PlainText
+                        text: "Config file"
+                        color: Color.foreground
+                        font.family: Style.font.family
+                        font.pixelSize: Style.font.subtitle
+                        font.bold: true
+                        elide: Text.ElideRight
+                        width: parent.width
+                      }
+
+                      Text {
+                        textFormat: Text.PlainText
+                        text: "Web search flags live in obscure.flags.json — edit the file or reload it without a restart"
+                        color: Qt.darker(Color.foreground, 1.5)
+                        font.family: Style.font.family
+                        font.pixelSize: Style.font.caption
+                        wrapMode: Text.WordWrap
+                        width: parent.width
+                      }
                     }
-                    onClicked: {
-                      root.draftConfigAction = "reload"
-                      root.configActivate()
+
+                    // Primary action sits rightmost, mirroring Apply/Close.
+                    Row {
+                      id: configRowBtns
+                      layoutDirection: Qt.RightToLeft
+                      spacing: Style.spacing.md
+                      anchors.verticalCenter: parent.verticalCenter
+
+                      Button {
+                        id: configEditButton
+                        text: "Edit config"
+                        selected: root.draftConfigAction === "edit"
+                        hasCursor: root.settingsIndex === 12 && root.draftConfigAction === "edit"
+                        onHovered: function(h) {
+                          if (!h) return
+                          root.settingsIndex = 12
+                          root.draftConfigAction = "edit"
+                        }
+                        onClicked: {
+                          root.draftConfigAction = "edit"
+                          root.configActivate()
+                        }
+
+                        // Same blink guard as Apply: the cursor fill is dimmer
+                        // than the selected fill, so an explicit accent ring
+                        // names the Enter target.
+                        Rectangle {
+                          anchors.fill: parent
+                          visible: configEditButton.hasCursor
+                          color: "transparent"
+                          border.color: Color.accent
+                          border.width: Math.max(1, Style.space(2))
+                          radius: Math.max(0, Style.cornerRadius - 1)
+                          Behavior on opacity { NumberAnimation { duration: root.animMs(120) } }
+                        }
+                      }
+
+                      Button {
+                        id: configReloadButton
+                        text: "Reload flags"
+                        selected: root.draftConfigAction === "reload"
+                        hasCursor: root.settingsIndex === 12 && root.draftConfigAction === "reload"
+                        onHovered: function(h) {
+                          if (!h) return
+                          root.settingsIndex = 12
+                          root.draftConfigAction = "reload"
+                        }
+                        onClicked: {
+                          root.draftConfigAction = "reload"
+                          root.configActivate()
+                        }
+
+                        Rectangle {
+                          anchors.fill: parent
+                          visible: configReloadButton.hasCursor
+                          color: "transparent"
+                          border.color: Color.accent
+                          border.width: Math.max(1, Style.space(2))
+                          radius: Math.max(0, Style.cornerRadius - 1)
+                          Behavior on opacity { NumberAnimation { duration: root.animMs(120) } }
+                        }
+                      }
                     }
                   }
 
-                  Button {
-                    id: configEditButton
-                    text: "Edit config"
-                    hasCursor: root.settingsIndex === 12 && root.draftConfigAction === "edit"
-                    onHovered: function(h) {
-                      if (!h) return
-                      root.settingsIndex = 12
-                      root.draftConfigAction = "edit"
-                    }
-                    onClicked: {
-                      root.draftConfigAction = "edit"
-                      root.configActivate()
-                    }
+                  HoverHandler {
+                    onHoveredChanged: function(h) { if (h) root.settingsIndex = 12 }
                   }
                 }
 
