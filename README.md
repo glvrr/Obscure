@@ -160,10 +160,14 @@ Open with `Ctrl+K` inside the card, or **right-click** the bar icon.
 - Animations — master toggle: smooth panel resize and content transitions; off
   makes everything instant.
 - Run `-r` in — where a shell command runs: **Silent** (bash in the background,
-  nothing visible, the default) or **External terminal** (the command runs in
-  your system terminal via `omarchy launch terminal`, same channel as `-oc`;
-  an interactive shell is left behind after the command so the window survives
-  and you can inspect output — close it with `exit`/`Ctrl+D` when done).
+  the default) or **External terminal** (the command runs in your system
+  terminal via `omarchy launch terminal`, same channel as `-oc`; an interactive
+  shell is left behind after the command so the window survives and you can
+  inspect output — close it with `exit`/`Ctrl+D` when done). Silent mode still
+  reports back in the status line: the card stays open while the command runs
+  ("Running…"), then flashes **Done!** (accent) and closes itself, or shows
+  **Error: \<output tail\>** (urgent) and stays open until you press `Esc` so
+  the message can be read.
 - Shell command warning — on by default: running a command via `-r` / `Ctrl+0`
   needs a second Enter (a flash in the hint line asks to confirm); off runs it
   instantly. Applies in both run modes.

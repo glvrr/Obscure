@@ -91,6 +91,16 @@ Item {
   // default flags; cleared by flashTimer.
   property string flashNote: ""
   readonly property bool flashActive: root.flashNote !== ""
+  // Silent -r run feedback state. _runTracked = an untracked silent run is in
+  // flight (the card must not auto-close until it finishes); _runOut holds the
+  // capped tail of its combined output; _resultGood (null | true | false) tags
+  // the current flashNote as a run result so the status line can colour it;
+  // _runSeq is a generation counter — a stale process exit (the user Esc'd,
+  // reopened or re-ran meanwhile) must not flash/close a card that moved on.
+  property bool _runTracked: false
+  property string _runOut: ""
+  property int _runSeq: 0
+  property var _resultGood: null
 
   // ---- resend query (history dropdown) ----
   // Down on an empty line pops the list of past queries; Up/Down walk it and
@@ -550,6 +560,14 @@ Item {
     root._opening = false
     root.runPendingCmd = ""
     root.historyOpen = false
+    // A fresh card is a fresh session for silent -r feedback: forget any
+    // in-flight run's tracking and stale result note so a background process
+    // can't flash onto the newly opened card.
+    root._runSeq++
+    root._runTracked = false
+    root._runOut = ""
+    root._resultGood = null
+    root.flashNote = ""
     var q = String(payload.query || "")
     // Summon routes: payload.tab picks the mode the card opens in —
     // "apps" (grid), "files" (file list) or "auto" (empty line). An explicit
@@ -800,23 +818,39 @@ Item {
   }
 
 // The -r / Ctrl+0 delivery channel, honouring the runTarget setting:
-// "silent" runs bash in the background, "external" opens a terminal so the
-// command + its output are visible (same terminal path as -oc, and like it
-// the query is one argv element — no shell quoting involved). In external
-// mode an interactive shell is handed over after the command, otherwise the
-// window would close the instant bash exits and there would be nothing to
-// look at. The handover is a fresh "\nexec bash" line — a stray ";" after the
-// newline would be "syntax error near unexpected token `;'" (a newline already
-// terminates the command), and "\n" also trims a rare "# comment" query tail.
+// "silent" runs bash in the background and reports the outcome in the status
+// line: the card stays open ("Running… (Esc to dismiss)") until the command
+// exits, then flashes "Done!" (accent) and auto-closes, or "Error: <output>"
+// (urgent) and waits for Esc so the message can be read. "external" opens a
+// terminal so the command + its output are visible (same terminal path as
+// -oc, and like it the query is one argv element — no shell quoting
+// involved). In external mode an interactive shell is handed over after the
+// command, otherwise the window would close the instant bash exits and there
+// would be nothing to look at. The handover is a fresh "\nexec bash" line — a
+// stray ";" after the newline would be "syntax error near unexpected token
+// `;'" (a newline already terminates the command), and "\n" also trims a rare
+// "# comment" query tail.
 function dispatchShell(q) {
-  var argv = root.runCommandFor(q)
-  Quickshell.execDetached(argv)
+  if (store.runTarget === "external") {
+    Quickshell.execDetached(["omarchy", "launch", "terminal", "bash", "-lc", q + "\nexec bash"])
+    return
+  }
+  root._runSeq++
+  silentRun.seq = root._runSeq
+  root._runTracked = true
+  root._runOut = ""
+  root._resultGood = null
+  silentRun.command = ["bash", "-lc", q]
+  silentRun.running = true
+  root.flashNote = "Running… (Esc to dismiss)"
 }
 
-function runCommandFor(q) {
-  return store.runTarget === "external"
-    ? ["omarchy", "launch", "terminal", "bash", "-lc", q + "\nexec bash"]
-    : ["bash", "-lc", q]
+// One-line summary of a failed silent run's output for the status line.
+function runErrorTail() {
+  var s = String(root._runOut || "").replace(/\s+/g, " ").trim()
+  if (s === "") return "non-zero exit"
+  if (s.length > 120) s = "…" + s.slice(s.length - 120)
+  return s
 }
 
   // CTRL+S: remember the current flag chips (or their absence) as the default
@@ -1192,6 +1226,13 @@ function runCommandFor(q) {
         break
       }
     }
+    if (root._runTracked) {
+      // A silent run went out in the batch: the web tabs above already fired,
+      // but the card stays open for the run feedback and closes only when the
+      // command reports (onExited) instead of right here.
+      root._opening = false
+      return
+    }
     root.close()
   }
 
@@ -1234,6 +1275,12 @@ function runCommandFor(q) {
       // First Enter with the confirm gate armed only shows the flash and keeps
       // the card open; the identical second Enter (runShell below) executes.
       if (!root.runShell(q)) return
+      if (root._runTracked) {
+        // Silent + feedback: the card stays open for "Running…" and the
+        // result; onExited reports it and (on success) closes the card.
+        root._opening = false
+        break
+      }
       root._opening = true
       root.close()
       break
@@ -1334,6 +1381,52 @@ function runCommandFor(q) {
     id: flashTimer
     interval: 1600
     onTriggered: root.flashNote = ""
+  }
+
+  // Success splash for a silent -r run: show "Done!" briefly, then close.
+  // Errors keep the card open (Esc) so the message can be read — flashTimer is
+  // stopped there on purpose to NOT wipe the error text after 1.6 s.
+  Timer {
+    id: runCloseTimer
+    interval: 1100
+    onTriggered: root.close()
+  }
+
+  // Silent -r delivery (dispatchShell). Root is an Item, so the Process child
+  // has a default `data` property to live in (Quickshell.Io). Output tails are
+  // accumulated into root._runOut; onExited reports via the flashNote status
+  // line. seq / root._runSeq keep a stale exit (user Esc'd, reopened or ran
+  // another command meanwhile) from flashing onto or closing the current card.
+  Process {
+    id: silentRun
+    property int seq: -1
+    stdout: SplitParser {
+      onRead: function(text) {
+        root._runOut += String(text || "")
+        if (root._runOut.length > 600) root._runOut = root._runOut.slice(-600)
+      }
+    }
+    stderr: SplitParser {
+      onRead: function(text) {
+        root._runOut += String(text || "")
+        if (root._runOut.length > 600) root._runOut = root._runOut.slice(-600)
+      }
+    }
+    onExited: function(exitCode, exitStatus) {
+      if (silentRun.seq !== root._runSeq) return
+      root._runTracked = false
+      // QProcess::ExitStatus: 0 = NormalExit, anything else = crash/killed.
+      var ok = exitCode === 0 && exitStatus === 0
+      root._resultGood = ok
+      if (ok) {
+        root.flashNote = "Done!"
+        flashTimer.restart()
+        runCloseTimer.restart()
+      } else {
+        root.flashNote = "Error: " + root.runErrorTail()
+        flashTimer.stop()
+      }
+    }
   }
 
   Timer {
@@ -2218,7 +2311,9 @@ function runCommandFor(q) {
             text: root.flashActive ? root.flashNote : root.hintText
             font.family: Style.font.menuFamily
             font.pixelSize: Style.font.title
-            color: root.dimColor
+            // A silent -r result is coloured: Done = accent, Error = urgent.
+            color: root._resultGood === null ? root.dimColor
+              : root._resultGood ? Color.accent : Color.urgent
             horizontalAlignment: Text.AlignHCenter
             verticalAlignment: Text.AlignVCenter
             elide: Text.ElideMiddle
