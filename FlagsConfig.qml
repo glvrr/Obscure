@@ -92,10 +92,19 @@ Item {
   // The config is read BLOCKING at construction so the first open already sees
   // the full registry. No onFileChanged: the watcher never fires on this host,
   // updates come from the settings "Reload flags" button (or a shell restart).
+  //
+  // blockAllReads (not just blockLoading) is REQUIRED: with blockLoading alone,
+  // reload() returns immediately and text() keeps serving the old snapshot until
+  // the async load finishes — so the first "Reload flags" click applied stale
+  // content and only the second one showed the edit. blockAllReads makes
+  // reload() block until the read completes, so apply(file.text()) right after
+  // is always fresh. The file is tiny and the read is a user action, so the
+  // blocking stutter the docs warn about does not matter here.
   FileView {
     id: file
     path: root.configPath
     blockLoading: true
+    blockAllReads: true
     watchChanges: false
   }
 
