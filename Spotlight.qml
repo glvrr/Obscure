@@ -439,16 +439,17 @@ Item {
   // and their own top-anchored column, so the header is dead weight above them
   // (its island toggles are duplicated as settings rows 0/1/3). Zeroing the
   // height here is all it takes — targetCardHeight derives from it, so the card
-  // shrinks and re-centers and contentArea (anchored to header.bottom) rides
-  // up on its own. The Behavior is required, not decoration: the card animates
-  // 200ms on cardHeightAnim, and a header that snapped to 0 instantly would
-  // leave an empty strip for the rest of that animation.
+  // reshapes and re-centers and contentArea (anchored to header.bottom) rides
+  // up on its own, on the card's existing single Behavior.
+  //
+  // Deliberately NOT animated: a Behavior here would hand targetCardHeight a new
+  // value every single frame, and the card's own 200ms Behavior would then chase
+  // a target that keeps moving. Two easings in series do not read as one motion
+  // — the panel judders through several catch-up steps while the card's edges
+  // lag behind it. One animated property per transition, no chain.
   property int headerHeight: (root.settingsOpen || root.helpOpen)
     ? 0
     : Math.max(Style.space(50), Style.spacing.controlHeight + Style.spacing.md * 2)
-  Behavior on headerHeight {
-    NumberAnimation { duration: root.animMs(200); easing.type: Easing.OutCubic }
-  }
   // Card gutter, the single source for the inner padding of the card: the
   // vertical edges take md (6) and the sides take 11 — the sides are
   // deliberately roomier than the top/bottom, which is what the layout wants.
@@ -2026,6 +2027,12 @@ function runErrorTail() {
           Item {
             id: settingsView
             visible: root.settingsOpen
+            // The header is gone the instant settings open (see headerHeight),
+            // so without a fade the panel pops while the card is still
+            // reshaping around it. 140ms is shorter than the card's 200ms on
+            // purpose: content lands first, the card finishes closing after.
+            opacity: root.settingsOpen ? 1 : 0
+            Behavior on opacity { NumberAnimation { duration: root.animMs(140); easing.type: Easing.OutQuad } }
             anchors.top: parent.top
             anchors.left: parent.left
             anchors.right: parent.right
@@ -2502,6 +2509,10 @@ function runErrorTail() {
           Item {
             id: helpView
             visible: root.helpOpen
+            // Same crossfade as settingsView: the header is already collapsed by
+            // the time this paints, so the content eases in as the card grows.
+            opacity: root.helpOpen ? 1 : 0
+            Behavior on opacity { NumberAnimation { duration: root.animMs(140); easing.type: Easing.OutQuad } }
             anchors.top: parent.top
             anchors.left: parent.left
             anchors.right: parent.right
