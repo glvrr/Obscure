@@ -312,10 +312,12 @@ Item {
     for (var i = 0; i < root.allApps.length && out.length < limit; i++) {
       var a = root.allApps[i]
       if (ql.length === 0) { out.push(a); continue }
-      var label = String(a.label).toLowerCase()
+      // `search` = label + leaf of the desktop id, precomputed in
+      // buildGridApps; the fallback keeps hand-built entries working.
+      var hay = String(a.search || a.label).toLowerCase()
       var hit = true
       for (var w = 0; w < ql.length; w++) {
-        if (label.indexOf(ql[w]) < 0) { hit = false; break }
+        if (hay.indexOf(ql[w]) < 0) { hit = false; break }
       }
       if (hit) out.push(a)
     }
@@ -330,12 +332,19 @@ Item {
       if (!appId) continue
       var label = String(it.label || (root.appLibrary && it.entry && root.appLibrary.entryName(it.entry)) || appId)
       var icon = String(it.icon || (it.entry && it.entry.icon) || "")
+      // What the app search matches on: the label PLUS the leaf of the desktop
+      // id (org.gnome.Terminal -> "terminal", org.gimp.GIMP -> "gimp"). Mirrors
+      // the host panel's nameSearchText, and without the id many installed apps
+      // are unfindable by the word people actually type — GIMP ships
+      // Name=GNU Image Manipulation Program, so only its id answers "gimp".
+      var leaf = appId.split(".").pop().toLowerCase()
       out.push({
         kind: "app",
         appId: appId,
         label: label,
         subtext: "",
-        iconUrl: it.iconUrl || iconResolver.resolve(icon)
+        iconUrl: it.iconUrl || iconResolver.resolve(icon),
+        search: (label + " " + leaf).toLowerCase()
       })
     }
     return out

@@ -37,7 +37,11 @@ property var apps: ([])
   }
 
   readonly property string cmd:
-    "dirs=\"$HOME/.local/share/applications /usr/share/applications /var/lib/flatpak/exports/share/applications\";\n" +
+// Application dirs, user overrides FIRST: the parser dedups by id on first
+    // sight, so a user's own entry must win over the system one. The user
+    // flatpak export dir is the one that is easy to forget — a flatpak app is
+    // invisible here (but fine in the stock panel) if it is not listed.
+    "dirs=\"$HOME/.local/share/applications $HOME/.local/share/flatpak/exports/share/applications /usr/share/applications /var/lib/flatpak/exports/share/applications\";\n" +
     "for d in $dirs; do [ -d \"$d\" ] || continue; find \"$d\" -maxdepth 1 -name '*.desktop' 2>/dev/null; done |\n" +
     "while read -r f; do\n" +
     "  id=\"$(basename \"$f\" .desktop)\"\n" +
