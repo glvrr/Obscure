@@ -435,7 +435,20 @@ Item {
   readonly property color dimColor: Qt.darker(Color.menu.text, 1.45)
   readonly property color selColor: Color.menu.selectedText
 
-  property int headerHeight: Math.max(Style.space(50), Style.spacing.controlHeight + Style.spacing.md * 2)
+  // The settings/help panels are full-panel views: they carry their own focus
+  // and their own top-anchored column, so the header is dead weight above them
+  // (its island toggles are duplicated as settings rows 0/1/3). Zeroing the
+  // height here is all it takes — targetCardHeight derives from it, so the card
+  // shrinks and re-centers and contentArea (anchored to header.bottom) rides
+  // up on its own. The Behavior is required, not decoration: the card animates
+  // 200ms on cardHeightAnim, and a header that snapped to 0 instantly would
+  // leave an empty strip for the rest of that animation.
+  property int headerHeight: (root.settingsOpen || root.helpOpen)
+    ? 0
+    : Math.max(Style.space(50), Style.spacing.controlHeight + Style.spacing.md * 2)
+  Behavior on headerHeight {
+    NumberAnimation { duration: root.animMs(200); easing.type: Easing.OutCubic }
+  }
   // Card gutter, the single source for the inner padding of the card: the
   // vertical edges take md (6) and the sides take 11 — the sides are
   // deliberately roomier than the top/bottom, which is what the layout wants.
@@ -1460,8 +1473,11 @@ function runErrorTail() {
       Qt.callLater(function() { settingsKeys.forceActiveFocus() })
     } else {
       // Close/Apply/Esc leave the settings view: back to the query line.
+      // callLater, like the open branch above: the header's `visible` binding
+      // is re-evaluated on the change notification, so on this very turn the
+      // line can still read as hidden and forceActiveFocus would go nowhere.
       root.headerPos = ""
-      queryField.forceActiveFocus()
+      Qt.callLater(function() { queryField.forceActiveFocus() })
     }
   }
   onHelpOpenChanged: {
@@ -1471,7 +1487,9 @@ function runErrorTail() {
       root.disarmPointer()
       Qt.callLater(function() { helpView.forceActiveFocus() })
     } else {
-      queryField.forceActiveFocus()
+      // Same reason as the settings branch: the header reappears on a binding
+      // re-evaluation, so the focus move waits a turn.
+      Qt.callLater(function() { queryField.forceActiveFocus() })
     }
   }
   onQueryChanged: {
@@ -1747,10 +1765,14 @@ function runErrorTail() {
       // as separate outlined controls.
       borderSpec: Border.surfaceSpec("popups", "border", Color.popups.border, Math.max(1, Style.space(2)))
 
-      // Clicking empty card space returns focus to the query line.
+      // Clicking empty card space returns focus to the query line. Guarded:
+      // the line is hidden while settings/help are up, and focusing an
+      // invisible field would take the keyboard away from the open panel.
       MouseArea {
         anchors.fill: parent
-        onClicked: queryField.forceActiveFocus()
+        onClicked: {
+          if (!root.settingsOpen && !root.helpOpen) queryField.forceActiveFocus()
+        }
       }
 
       Item {
@@ -1816,6 +1838,9 @@ function runErrorTail() {
           anchors.left: parent.left
           anchors.right: parent.right
           height: root.headerHeight
+          // height 0 is not enough on its own: RowLayout has no clip, and its
+          // Layout.alignment: VCenter children keep painting outside the row.
+          visible: root.headerHeight > 0
           spacing: root.showTabs ? Style.spacing.lg : 0
           Behavior on spacing { NumberAnimation { duration: root.animMs(180); easing.type: Easing.InOutQuad } }
 
