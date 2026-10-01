@@ -4,7 +4,7 @@
 # terminal (xdg-terminal-exec, Default Terminal Spec). Otherwise xdg-open.
 set -u
 
-path="$1"
+path="${1:-}"
 if [ -z "$path" ] || [ ! -e "$path" ]; then
   xdg-open "$path" >/dev/null 2>&1
   exit 0
@@ -21,12 +21,40 @@ fi
 
 if [ -n "$entry" ] && grep -q '^[[:space:]]*Terminal[[:space:]]*=[[:space:]]*true' "$entry"; then
   exec_line=$(awk -F= 'tolower($1)=="exec" { sub(/^[^=]*[[:space:]]*=[[:space:]]*/,""); print; exit }' "$entry")
-  # Replace the first %f/%F/%u/%U code with the shell-quoted path, strip
-  # the informational %i/%c/%k codes, then hand the command to the terminal.
-  quoted=$(printf '%q' "$path")
-  cmd=$(printf '%s' "$exec_line" | sed 's/%[fuFU]/__QP__/; s/%[ick]/X/g' | sed "s|__QP__|$quoted|")
-  cd "$(dirname "$path")" 2>/dev/null || true
-  exec xdg-terminal-exec -- sh -c "$cmd; exec \${SHELL:-bash}; exit 0" "open-file"
-else
-  exec xdg-open "$path"
+  # Terminal=true with no Exec line cannot be launched at all: fall through to
+  # xdg-open instead of opening a terminal that only reports a syntax error.
+  if [ -n "$exec_line" ]; then
+    # Desktop Entry field codes: %f/%F/%u/%U becomes the token "$1" and the
+    # informational %i/%c/%k are dropped. Quotes that wrapped the code are
+    # consumed, so the substitution is always a single quoted expansion
+    # whatever the Exec line looked like (the rules are ordered: quoted first,
+    # bare last).
+    #
+    # THE FILE NAME IS NEVER PART OF THE SHELL CODE. It is handed to sh as its
+    # positional parameter and is only ever referenced as "$1", so not one byte
+    # of a name is parsed as shell syntax: spaces, quotes, $, (), `, ;, &, |,
+    # <, >, backslashes, embedded newlines and a leading dash all survive
+    # verbatim, as exactly one argument.
+    #
+    # The previous version was exploitable. It ran the name through printf '%q'
+    # (which escapes for a SHELL) and pasted the result into the REPLACEMENT
+    # half of a sed s/// command, where sed consumed those backslashes as its
+    # own escapes and handed the metacharacters back raw: a file named
+    # 'a;id;.txt' reached sh -c as 'a;id;.txt' and the semicolon ran as a
+    # command separator. Two escaping languages and one parse — the protection
+    # one applied was eaten by the other.
+    #
+    # The sed script is double quoted so it can carry both quote characters;
+    # \$1 is a literal $1 for sed's replacement, not a shell expansion. The
+    # delimiter is | because it cannot appear in a field code and does not in
+    # any Exec line on this system; if you pick another, re-check that.
+    script=$(printf '%s' "$exec_line" |
+      sed "s|\"\(%[fFuU]\)\"|\"\$1\"|g; s|'\(%[fFuU]\)'|\"\$1\"|g; s|%[fFuU]|\"\$1\"|g; s|%[ick]|X|g")
+    cd "$(dirname -- "$path")" 2>/dev/null || true
+    # $1 here is sh's positional parameter, never the shell's $1 from this
+    # script, and "${SHELL:-bash}" stays quoted so a hostile SHELL cannot split.
+    exec xdg-terminal-exec -- sh -c "$script; exec \"\${SHELL:-bash}\"; exit 0" open-file "$path"
+  fi
 fi
+
+exec xdg-open "$path"
