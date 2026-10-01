@@ -7,8 +7,8 @@ type. Quickshell/QML plugin, no background service, no telemetry.
 ```
   ┌──────────────────────────────────────────────┐
   │ [O] [APPS] [FILES]  │  ⌨  type to search…    │
-  │                      │ [google] cats         │
-  │                      │  · Search Google       │
+  │                     │  [google] cats         │
+  │                     │  · Search Google       │
   └──────────────────────────────────────────────┘
 ```
 
