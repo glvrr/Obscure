@@ -85,6 +85,17 @@ omarchy plugin update                      # every git-managed plugin
 omarchy plugin remove glvr.ninja.obscure
 ```
 
+`remove` deletes only the plugin checkout, so your settings survive a
+reinstall. The data lives outside the checkout and is never touched:
+
+```sh
+~/.config/omarchy/obscure.json          # settings
+~/.config/omarchy/obscure.flags.json    # custom web flags (see below)
+~/.local/state/obscure/history.json     # resend-query history
+```
+
+Delete those three by hand if you want a clean slate.
+
 ## Features
 
 - **One card, zero latency** — the card opens as a floating layer over
