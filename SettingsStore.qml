@@ -28,6 +28,11 @@ Item {
   // a slot whose widget is invisible (ModuleSlot implicitWidth checks
   // activeItem.visible), so hiding the root leaves no gap behind.
   property bool showBarIcon: true
+  // Master switch for shell commands: with it off the -r flag and Ctrl+0
+  // refuse to run anything (the card stays open and flashes why). Default
+  // OFF for a fresh install; a config that predates this key keeps running
+  // commands, so upgrading never silently kills -r for existing users.
+  property bool allowRun: false
   // Ask to press Enter a second time before running a shell command (-r /
   // Ctrl+0); off = execute instantly. Default ON: silent shell execution is
   // otherwise one keystroke away from a search typo.
@@ -74,7 +79,15 @@ Item {
 
   function apply(raw) {
     var o = {}
-    try { o = JSON.parse(String(raw || "")) } catch (e) { o = {} }
+    // Whether a config file actually existed, as opposed to an empty/missing
+    // read: this is what separates a fresh install (shell commands OFF) from a
+    // config that predates `allowRun` (commands keep working, see below).
+    var hasConfig = false
+    try {
+      o = JSON.parse(String(raw || ""))
+      hasConfig = !!o && typeof o === "object"
+      if (!hasConfig) o = {}
+    } catch (e) { o = {} }
     var m = o.defaultMode
     root.defaultMode = (m === "apps" || m === "files" || m === "auto") ? m : "auto"
     root.showHidden = !!o.showHidden
@@ -84,6 +97,11 @@ Item {
     root.animations = o.animations === undefined ? true : !!o.animations
     root.appsView = o.appsView === "list" ? "list" : "grid"
     root.showBarIcon = o.showBarIcon === undefined ? true : !!o.showBarIcon
+    // Absent key = a config written before the switch existed, and that user
+    // was already running commands: keep them on rather than silently
+    // breaking -r on upgrade. A brand-new install has no file at all (hasConfig
+    // false) and starts off.
+    root.allowRun = hasConfig ? (o.allowRun === undefined ? true : !!o.allowRun) : false
     root.confirmRun = o.confirmRun === undefined ? true : !!o.confirmRun
     root.runTarget = o.runTarget === "external" ? "external" : "silent"
     // Kept verbatim (no trim): "-g " with its trailing space must stay so the
@@ -114,6 +132,7 @@ Item {
         animations: root.animations,
         appsView: root.appsView,
         showBarIcon: root.showBarIcon,
+        allowRun: root.allowRun,
         confirmRun: root.confirmRun,
         runTarget: root.runTarget,
         defaultFlags: root.defaultFlags,

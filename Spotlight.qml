@@ -79,6 +79,8 @@ Item {
   property string draftDefaultMode: "auto"
   property bool draftShowHidden: false
   property bool draftAnimations: true
+  // Master switch for -r / Ctrl+0, as text while editing ("on" | "off").
+  property string draftAllowRun: "off"
   property bool draftConfirmRun: true
   property string draftRunTarget: "silent"
   property bool draftBarIcon: true
@@ -510,12 +512,43 @@ Item {
     NumberAnimation { duration: root.animMs(200); easing.type: Easing.OutCubic }
   }
 
-  // Height of the settings panel: header + 3 island toggles + separator +
-  // default-mode row + show-hidden toggle + animations toggle + run-warning
-  // toggle + bar-icon toggle + history field + flags field + config-file row +
-  // buttons row. Kept derived from the real content so adding/removing a row
-  // can't overflow the fixed-height card.
-  readonly property int settingsPanelHeight: settingsControlCol.implicitHeight
+  // Height of the settings panel, in three sections:
+  //   Visuals  O island / Apps island / Files island / Animations / Bar icon /
+  //            Apps view
+  //   Search   Default search mode / Pre-filled flags / Query history /
+  //            User flags file / Show hidden
+  //   Shell    Run shell commands / Shell command warning / Run -r in
+  // plus Apply + Close. Derived from the real content, but CLAMPED to the
+  // window: 16 rows are taller than a 1080p screen minus the bar, and the card
+  // has no other way to shrink (settingsControlCol scrolls instead).
+  readonly property int settingsPanelHeight: Math.min(
+    settingsControlCol.implicitHeight,
+    Math.max(Style.space(200),
+      window.height - root.headerHeight - Style.spacing.md * 2 - Style.gapsOut * 2 - Style.spacing.sm)
+  )
+
+  // Panel rows in settingsIndex order (0..15). The keyboard walks these
+  // indexes, and settingsReveal() maps the cursor onto a row to scroll it
+  // into view — without it, walking past the fold would move the cursor off
+  // screen with no visible focus.
+  readonly property var settingsRows: [
+    showOToggle,
+    showAppsToggle,
+    showFilesToggle,
+    animationsToggle,
+    showBarIconToggle,
+    appsViewToggle,
+    defaultModeToggle,
+    defaultFlagsRow,
+    historyRow,
+    configFileRow,
+    showHiddenToggle,
+    allowRunToggle,
+    confirmRunToggle,
+    runModeToggle,
+    applyButton,
+    closeButton
+  ]
 
   // Height of the help view: section header + row list (capped, scrolls when
   // longer) + hint footer, all derived from real content.
@@ -639,6 +672,7 @@ Item {
     root.draftDefaultMode = store.defaultMode
     root.draftShowHidden = store.showHidden
     root.draftAnimations = store.animations
+    root.draftAllowRun = store.allowRun ? "on" : "off"
     root.draftConfirmRun = store.confirmRun
     root.draftRunTarget = store.runTarget
     root.draftBarIcon = store.showBarIcon
@@ -646,57 +680,85 @@ Item {
     root.draftDefaultFlags = store.defaultFlags
     root.draftConfigAction = "edit"
     root.settingsIndex = 0
+    settingsFlick.contentY = 0
   }
 
-  // Vertical walk (Up/Down + j/k). Rows 0..11 are the fields/settings controls;
-  // 12 is the standalone Config-file row (Edit/Reload, switched with
-  // Left/Right); 13/14 are the Apply/Close buttons — ONE vertical target:
-  // Down from the last field enters it (landing on Apply), Down while inside
-  // is a no-op (nothing sits below and Down must never pick a button —
-  // switching Apply/Close is Left/Right only), Up leaves back to the Config
-  // row. Above the fields the walk is bounded to 0..11, no wrap.
+  // Vertical walk (Up/Down + j/k) over the three sections:
+  //   Visuals  0..5  (O island, Apps island, Files island, Animations,
+  //                   Bar icon, Apps view)
+  //   Search   6..10 (Default search mode, Pre-filled flags, Query history,
+  //                   User flags file, Show hidden)
+  //   Shell   11..13 (Run shell commands, Shell command warning, Run -r in)
+  // 14/15 are the Apply/Close buttons — ONE vertical target: Down from the last
+  // row enters it (landing on Apply), Down while inside is a no-op (nothing
+  // sits below and Down must never pick a button — switching Apply/Close is
+  // Left/Right only), Up leaves back to row 13. Above row 0 the walk is
+  // bounded, no wrap.
   function settingsMove(dir) {
-    if (root.settingsIndex === 12) {
-      root.settingsIndex = dir < 0 ? 11 : 13
-    } else if (root.settingsIndex > 12) {
-      if (dir < 0) root.settingsIndex = 12
-    } else {
-      var next = root.settingsIndex + dir
-      root.settingsIndex = next > 11 ? 12 : Math.max(0, next)
+    if (root.settingsIndex >= 14) {
+      if (dir < 0) {
+        root.settingsIndex = 13
+        root.settingsReveal()
+      }
+      return
     }
+    var next = root.settingsIndex + dir
+    root.settingsIndex = next > 13 ? 14 : Math.max(0, next)
+    root.settingsReveal()
   }
 
-  // Tab/Shift+Tab still visit EVERY control including config row and both
+  // Scroll the settings panel so the row the cursor stands on is inside the
+  // visible band. The panel is clamped to the window, so the keyboard walk can
+  // otherwise carry the focus off-screen; a quarter-row of margin keeps the
+  // row off the panel's own edges.
+  function settingsReveal() {
+    var row = root.settingsRows[root.settingsIndex]
+    if (!row) return
+    var top = row.mapToItem(settingsFlick, 0, 0).y
+    var bottom = top + row.height
+    if (top < settingsFlick.contentY)
+      settingsFlick.contentY = Math.max(0, top - Style.spacing.sm)
+    else if (bottom > settingsFlick.contentY + settingsFlick.height)
+      settingsFlick.contentY = bottom - settingsFlick.height + Style.spacing.sm
+  }
+
+  // Tab/Shift+Tab still visit EVERY control including the config row and both
   // buttons, so keyboard users can reach Close directly with the tab chain
   // (vertical walk treats the button row as a single unit).
   function settingsTab(dir) {
-    var n = 15 // toggles x7 + segmented rows x3 + history + flags + config + Apply + Close
+    var n = 16 // toggles x6 + segmented rows x4 + history + flags + config + Apply + Close
     root.settingsIndex = (root.settingsIndex + dir + n) % n
+    root.settingsReveal()
   }
 
   // Left/Right (+ h/l) act on the control the cursor stands on: toggles flip,
-  // the dropdowns step their options, the bottom row switches between
+  // the segmented rows step their options, the bottom row switches between
   // Apply/Close, the text fields do nothing (the editor gets the caret arrows
   // while focused).
   function settingsHorizontal(dir) {
     if (dir === 0) return
-    if (root.settingsIndex >= 13) {
-      root.settingsIndex = root.settingsIndex === 13 ? 14 : 13
+    if (root.settingsIndex >= 14) {
+      root.settingsIndex = root.settingsIndex === 14 ? 15 : 14
+      root.settingsReveal()
       return
     }
-    if (root.settingsIndex === 12) {
-      root.draftConfigAction = root.dropdownStep([{ value: "edit" }, { value: "reload" }], root.draftConfigAction, dir)
-      return
-    }
-    if (root.settingsIndex === 2) {
+    if (root.settingsIndex === 5) {
       root.draftAppsView = root.dropdownStep(appsViewToggle.options, root.draftAppsView, dir)
       return
     }
-    if (root.settingsIndex === 4) {
+    if (root.settingsIndex === 6) {
       root.draftDefaultMode = root.dropdownStep(defaultModeToggle.options, root.draftDefaultMode, dir)
       return
     }
-    if (root.settingsIndex === 7) {
+    if (root.settingsIndex === 9) {
+      root.draftConfigAction = root.dropdownStep([{ value: "edit" }, { value: "reload" }], root.draftConfigAction, dir)
+      return
+    }
+    if (root.settingsIndex === 11) {
+      root.draftAllowRun = root.dropdownStep(allowRunToggle.options, root.draftAllowRun, dir)
+      return
+    }
+    if (root.settingsIndex === 13) {
       root.draftRunTarget = root.dropdownStep(runModeToggle.options, root.draftRunTarget, dir)
       return
     }
@@ -704,11 +766,11 @@ Item {
     switch (root.settingsIndex) {
     case 0: showOToggle.clicked(); break
     case 1: showAppsToggle.clicked(); break
-    case 3: showFilesToggle.clicked(); break
-    case 5: showHiddenToggle.clicked(); break
-    case 6: animationsToggle.clicked(); break
-    case 8: confirmRunToggle.clicked(); break
-    case 9: showBarIconToggle.clicked(); break
+    case 2: showFilesToggle.clicked(); break
+    case 3: animationsToggle.clicked(); break
+    case 4: showBarIconToggle.clicked(); break
+    case 10: showHiddenToggle.clicked(); break
+    case 12: confirmRunToggle.clicked(); break
     }
   }
 
@@ -725,33 +787,35 @@ Item {
   }
 
   function settingsActivate() {
+    root.settingsReveal()
     switch (root.settingsIndex) {
     case 0: showOToggle.clicked(); break
     case 1: showAppsToggle.clicked(); break
-    case 2: root.draftAppsView = root.dropdownStep(appsViewToggle.options, root.draftAppsView, 1); break
-    case 3: showFilesToggle.clicked(); break
-    case 4: root.draftDefaultMode = root.dropdownStep(defaultModeToggle.options, root.draftDefaultMode, 1); break
-    case 5: showHiddenToggle.clicked(); break
-    case 6: animationsToggle.clicked(); break
-    case 7: root.draftRunTarget = root.dropdownStep(runModeToggle.options, root.draftRunTarget, 1); break
-    case 8: confirmRunToggle.clicked(); break
-    case 9: showBarIconToggle.clicked(); break
-    case 10:
+    case 2: showFilesToggle.clicked(); break
+    case 3: animationsToggle.clicked(); break
+    case 4: showBarIconToggle.clicked(); break
+    case 5: root.draftAppsView = root.dropdownStep(appsViewToggle.options, root.draftAppsView, 1); break
+    case 6: root.draftDefaultMode = root.dropdownStep(defaultModeToggle.options, root.draftDefaultMode, 1); break
+    case 7:
+      defaultFlagsField.forceActiveFocus()
+      defaultFlagsField.cursorPosition = defaultFlagsField.text.length
+      break
+    case 8:
       historyField.forceActiveFocus()
       // Six digits wide, so the old value is almost always replaced whole:
       // select it instead of parking the caret after it, otherwise the user
       // has to backspace through "10" before typing a new number.
       historyField.selectAll()
       break
-    case 11:
-      defaultFlagsField.forceActiveFocus()
-      defaultFlagsField.cursorPosition = defaultFlagsField.text.length
-      break
-    case 12:
+    case 9:
       root.configActivate(); break
-    case 13:
-      root.settingsApply(); break
+    case 10: showHiddenToggle.clicked(); break
+    case 11: root.draftAllowRun = root.dropdownStep(allowRunToggle.options, root.draftAllowRun, 1); break
+    case 12: confirmRunToggle.clicked(); break
+    case 13: root.draftRunTarget = root.dropdownStep(runModeToggle.options, root.draftRunTarget, 1); break
     case 14:
+      root.settingsApply(); break
+    case 15:
       root.exitSettings(); break
     }
   }
@@ -765,6 +829,7 @@ Item {
     store.defaultMode = root.draftDefaultMode
     store.showHidden = root.draftShowHidden
     store.animations = root.draftAnimations
+    store.allowRun = root.draftAllowRun === "on"
     store.confirmRun = root.draftConfirmRun
     store.runTarget = root.draftRunTarget
     store.showBarIcon = root.draftBarIcon
@@ -803,11 +868,16 @@ Item {
 
   // Fires a shell command with an optional Enter-twice gate. Returns true when
   // the command was executed (the caller closes the card) and false when it
-  // was only ARMED (the caller must keep the card open and show the flash).
+  // was only ARMED, or REFUSED because "Run Shell Commands" is off — in both
+  // cases the caller must keep the card open and let the flash speak.
   // The gate is `store.confirmRun`; an already-armed identical command skips
   // straight to execution. Any edit to the query (onQueryChanged) or card
   // close clears the arm, so the second Enter can never fire a stale command.
   function runShell(q) {
+    if (!store.allowRun) {
+      root.dispatchShell(q)
+      return false
+    }
     if (store.confirmRun && root.runPendingCmd !== q) {
       root.runPendingCmd = q
       root._resultGood = null
@@ -816,8 +886,7 @@ Item {
       return false
     }
     root.runPendingCmd = ""
-    root.dispatchShell(q)
-    return true
+    return root.dispatchShell(q)
   }
 
 // The -r / Ctrl+0 delivery channel, honouring the runTarget setting:
@@ -834,6 +903,20 @@ Item {
 // `;'" (a newline already terminates the command), and "\n" also trims a rare
 // "# comment" query tail.
 function dispatchShell(q) {
+  // Master switch ("Run Shell Commands" in Settings): every shell command
+  // funnels through here — the -r flag, Ctrl+0 (which just prefills "-r ") and
+  // mixed batches like "-g -r" — so this is the one place that can refuse all
+  // of them. The check comes BEFORE the Enter-twice gate: with commands off
+  // there is nothing to confirm, and arming would promise a second Enter that
+  // can never do anything. -oc is deliberately not routed here (it opens the
+  // coding agent, not a user-supplied command line).
+  if (!store.allowRun) {
+    root.runPendingCmd = ""
+    root._resultGood = false
+    root.flashNote = "Shell commands are off — enable them in Settings (Ctrl+K)"
+    flashTimer.stop()
+    return
+  }
   if (store.runTarget === "external") {
     Quickshell.execDetached(["omarchy", "launch", "terminal", "bash", "-lc", q + "\nexec bash"])
     return
@@ -1286,7 +1369,7 @@ function runErrorTail() {
     root.debugLog("flags registry=" + root.flagCount)
   }
 
-  // "Edit config" / "Reload flags" target behind settings index 12.
+  // "Edit Config" / "Reload Flags" target behind settings index 9.
   function configActivate() {
     if (root.draftConfigAction === "reload") {
       flagsConfig.reload()
@@ -1368,7 +1451,16 @@ function runErrorTail() {
   // Enter — a partial fire (web tabs opening first with the shell still
   // pending) would leave half the request already gone.
   function runRequests(modes, q) {
-    if (modes.indexOf("run") >= 0 && store.confirmRun && root.runPendingCmd !== q) {
+    var wantsRun = modes.indexOf("run") >= 0
+    // "Run Shell Commands" off: refuse the whole batch BEFORE anything is
+    // dispatched. Half-firing it (web tabs open, shell never runs) would be
+    // worse than doing nothing, and the web flags in the batch are not what
+    // the user was after anyway — the shell was in there on purpose.
+    if (wantsRun && !store.allowRun) {
+      root.dispatchShell(q)
+      return
+    }
+    if (wantsRun && store.confirmRun && root.runPendingCmd !== q) {
       root.runPendingCmd = q
       root._resultGood = null
       root.flashNote = "Run in shell? Press Enter again to confirm"
@@ -2065,453 +2157,558 @@ function runErrorTail() {
               onActivateRequested: root.settingsActivate()
               onCloseRequested: root.exitSettings()
 
-              Column {
-                id: settingsControlCol
+              // The panel is taller than a short screen (16 rows), so it
+              // scrolls when the card has to be clamped. PanelKeyCatcher's
+              // Keys.priority: BeforeItem is what keeps Up/Down driving the
+              // cursor instead of the Flickable's own scroll handling.
+              Flickable {
+                id: settingsFlick
                 anchors.fill: parent
-                spacing: Style.spacing.sm
+                contentWidth: width
+                contentHeight: settingsControlCol.implicitHeight
+                boundsBehavior: Flickable.StopAtBounds
+                clip: true
 
-                PanelSectionHeader {
-                  width: parent.width
-                  text: "UI elements"
-                }
+                Column {
+                  id: settingsControlCol
+                  // width, not anchors.fill: the Column's implicit height is
+                  // what both the cap and the scroll extent are measured from.
+                  width: settingsFlick.width
+                  y: -settingsFlick.contentY
+                  spacing: Style.spacing.sm
 
-                Toggle {
-                  id: showOToggle
-                  width: parent.width
-                  label: "Omarchy island"
-                  description: "Show the O button that opens the Omarchy menu"
-                  checked: root.draftShowO
-                  hasCursor: root.settingsIndex === 0
-                  onHovered: function(h) { if (h) root.settingsIndex = 0 }
-                  onClicked: root.draftShowO = !root.draftShowO
-                }
-
-                Toggle {
-                  id: showAppsToggle
-                  width: parent.width
-                  label: "Apps island"
-                  description: "Show the APPS search button"
-                  checked: root.draftShowApps
-                  hasCursor: root.settingsIndex === 1
-                  onHovered: function(h) { if (h) root.settingsIndex = 1 }
-                  onClicked: root.draftShowApps = !root.draftShowApps
-                }
-
-                SegmentedToggle {
-                  id: appsViewToggle
-                  width: parent.width
-                  label: "Apps view"
-                  options: [
-                    { value: "grid", label: "Grid" },
-                    { value: "list", label: "List" }
-                  ]
-                  value: root.draftAppsView
-                  hasCursor: root.settingsIndex === 2
-                  onHovered: function(h) { if (h) root.settingsIndex = 2 }
-                  onChanged: function(value) { root.draftAppsView = value }
-                }
-
-                Toggle {
-                  id: showFilesToggle
-                  width: parent.width
-                  label: "Files island"
-                  description: "Show the FILES search button"
-                  checked: root.draftShowFiles
-                  hasCursor: root.settingsIndex === 3
-                  onHovered: function(h) { if (h) root.settingsIndex = 3 }
-                  onClicked: root.draftShowFiles = !root.draftShowFiles
-                }
-
-                PanelSeparator {
-                  width: parent.width
-                }
-
-                SegmentedToggle {
-                  id: defaultModeToggle
-                  width: parent.width
-                  label: "Default search mode"
-                  options: [
-                    { value: "auto", label: "Auto" },
-                    { value: "apps", label: "Apps" },
-                    { value: "files", label: "Files" }
-                  ]
-                  value: root.draftDefaultMode
-                  hasCursor: root.settingsIndex === 4
-                  onHovered: function(h) { if (h) root.settingsIndex = 4 }
-                  onChanged: function(value) { root.draftDefaultMode = value }
-                }
-
-                Toggle {
-                  id: showHiddenToggle
-                  width: parent.width
-                  label: "Show hidden by default"
-                  description: "Include dotfiles in file and directory searches"
-                  checked: root.draftShowHidden
-                  hasCursor: root.settingsIndex === 5
-                  onHovered: function(h) { if (h) root.settingsIndex = 5 }
-                  onClicked: root.draftShowHidden = !root.draftShowHidden
-                }
-
-                Toggle {
-                  id: animationsToggle
-                  width: parent.width
-                  label: "Animations"
-                  description: "Smooth panel resize, island collapse, fades and color shifts; off = instant response"
-                  checked: root.draftAnimations
-                  hasCursor: root.settingsIndex === 6
-                  onHovered: function(h) { if (h) root.settingsIndex = 6 }
-                  onClicked: root.draftAnimations = !root.draftAnimations
-                }
-
-                SegmentedToggle {
-                  id: runModeToggle
-                  width: parent.width
-                  label: "Run -r in"
-                  options: [
-                    { value: "silent", label: "Silent" },
-                    { value: "external", label: "External terminal" }
-                  ]
-                  value: root.draftRunTarget
-                  hasCursor: root.settingsIndex === 7
-                  onHovered: function(h) { if (h) root.settingsIndex = 7 }
-                  onChanged: function(value) { root.draftRunTarget = value }
-                }
-
-                Toggle {
-                  id: confirmRunToggle
-                  width: parent.width
-                  label: "Shell command warning"
-                  description: "Press Enter twice to run -r / Ctrl+0 commands instead of running them instantly"
-                  checked: root.draftConfirmRun
-                  hasCursor: root.settingsIndex === 8
-                  onHovered: function(h) { if (h) root.settingsIndex = 8 }
-                  onClicked: root.draftConfirmRun = !root.draftConfirmRun
-                }
-
-                Toggle {
-                  id: showBarIconToggle
-                  width: parent.width
-                  label: "Bar icon"
-                  description: "Show the magnifier button in the top bar (hotkeys keep working)"
-                  checked: root.draftBarIcon
-                  hasCursor: root.settingsIndex === 9
-                  onHovered: function(h) { if (h) root.settingsIndex = 9 }
-                  onClicked: root.draftBarIcon = !root.draftBarIcon
-                }
-
-                // Resend-query cap. A labelled number box, NOT another
-                // full-width field: the value is 0..200, so six digits is
-                // plenty and the row reads like a label + control pair
-                // instead of stretching the input across the whole panel.
-                Row {
-                  width: parent.width
-                  spacing: Style.spacing.rowPaddingX
-
-                  Text {
-                    id: historyLabel
-                    // Row titles elsewhere in this panel (Ui/Toggle) are
-                    // bold + subtitle + foreground; match them exactly.
-                    anchors.verticalCenter: parent.verticalCenter
-                    textFormat: Text.PlainText
-                    text: "Query history"
-                    color: Color.foreground
-                    font.family: Style.font.family
-                    font.pixelSize: Style.font.subtitle
-                    font.bold: true
-                    elide: Text.ElideRight
+                  // ---- Visuals ----
+                  PanelSectionHeader {
+                    width: parent.width
+                    text: "Visuals"
+                    // The kit ships section headers at caption size (10px), which
+                    // reads as a whisper next to this panel's 13px bold row
+                    // titles. Raise just the size; the kit's dimmed colour is
+                    // what separates the section from its rows.
+                    fontSize: Style.font.subtitle
                   }
 
-                  TextField {
-                    id: historyField
-                    // Everything the label leaves, so the box runs to the
-                    // panel's right edge. NOT a TextMetrics probe: that copies
-                    // the kit font before it resolves and measured 0 here,
-                    // which collapsed the field to a sliver.
-                    width: Math.max(0, parent.width - historyLabel.implicitWidth - parent.spacing)
-                    placeholderText: "10"
-                    hasCursor: root.settingsIndex === 10
-                    onHoveredChanged: if (historyField.hovered) root.settingsIndex = 10
-                    onTextChanged: {
-                      var digits = text.replace(/[^0-9]/g, "")
-                      if (digits !== text) {
-                        text = digits
-                        cursorPosition = digits.length
-                      }
-                      if (root.draftHistory !== text) root.draftHistory = text
-                    }
-                    Connections {
-                      target: root
-                      function onDraftHistoryChanged() {
-                        if (historyField.text !== root.draftHistory && !historyField.activeFocus)
-                          historyField.text = root.draftHistory
-                      }
-                    }
-                    // The field owns the keys while focused (settingsKeys is
-                    // blocked): Up/Down leave the editor and keep walking the
-                    // settings cursor, Enter jumps straight to Apply, Esc just
-                    // drops back out — the same contract as the flags editor.
-                    Keys.onDownPressed: function(event) {
-                      event.accepted = true
-                      settingsKeys.forceActiveFocus()
-                      root.settingsMove(1)
-                    }
-                    Keys.onUpPressed: function(event) {
-                      event.accepted = true
-                      settingsKeys.forceActiveFocus()
-                      root.settingsMove(-1)
-                    }
-                    Keys.onReturnPressed: function(event) {
-                      event.accepted = true
-                      settingsKeys.forceActiveFocus()
-                      root.settingsIndex = 13
-                    }
-                    Keys.onEnterPressed: function(event) {
-                      event.accepted = true
-                      settingsKeys.forceActiveFocus()
-                      root.settingsIndex = 13
-                    }
-                    Keys.onEscapePressed: function(event) {
-                      event.accepted = true
-                      settingsKeys.forceActiveFocus()
-                    }
+                  Toggle {
+                    id: showOToggle
+                    width: parent.width
+                    label: "Omarchy Island"
+                    description: "Show the O button that opens the Omarchy menu"
+                    checked: root.draftShowO
+                    hasCursor: root.settingsIndex === 0
+                    onHovered: function(h) { if (h) root.settingsIndex = 0 }
+                    onClicked: root.draftShowO = !root.draftShowO
                   }
-                }
 
-                TextField {
-                  id: defaultFlagsField
-                  width: parent.width
-                  placeholderText: "Flags prefilled on open  e.g. -g -. -p"
-                  hasCursor: root.settingsIndex === 11
-                  onHoveredChanged: if (defaultFlagsField.hovered) root.settingsIndex = 11
-                  onTextChanged: {
-                    // Guarded: never echo an external set back into the draft,
-                    // so the caret is not yanked around while typing.
-                    if (root.draftDefaultFlags !== text)
-                      root.draftDefaultFlags = text
+                  Toggle {
+                    id: showAppsToggle
+                    width: parent.width
+                    label: "Apps Island"
+                    description: "Show the APPS search button"
+                    checked: root.draftShowApps
+                    hasCursor: root.settingsIndex === 1
+                    onHovered: function(h) { if (h) root.settingsIndex = 1 }
+                    onClicked: root.draftShowApps = !root.draftShowApps
                   }
-                  Connections {
-                    target: root
-                    function onDraftDefaultFlagsChanged() {
-                      if (defaultFlagsField.text !== root.draftDefaultFlags && !defaultFlagsField.activeFocus)
-                        defaultFlagsField.text = root.draftDefaultFlags
-                    }
-                  }
-                  // The field owns the keys while focused (settingsKeys is
-                  // blocked); a single-line editor has no use for Up/Down so
-                  // they leave the editor and keep walking the settings
-                  // cursor. Enter commits the flags by jumping straight to
-                  // Apply; Esc just drops back out to the field's row.
-                  Keys.onDownPressed: function(event) {
-                    event.accepted = true
-                    settingsKeys.forceActiveFocus()
-                    root.settingsMove(1)
-                  }
-                  Keys.onUpPressed: function(event) {
-                    event.accepted = true
-                    settingsKeys.forceActiveFocus()
-                    root.settingsMove(-1)
-                  }
-                  Keys.onReturnPressed: function(event) {
-                    event.accepted = true
-                    settingsKeys.forceActiveFocus()
-                    root.settingsIndex = 13
-                  }
-                  Keys.onEnterPressed: function(event) {
-                    event.accepted = true
-                    settingsKeys.forceActiveFocus()
-                    root.settingsIndex = 13
-                  }
-                  Keys.onEscapePressed: function(event) {
-                    // First Esc drops out of the editor back to the settings
-                    // cursor (the panel's own Esc then closes settings).
-                    event.accepted = true
-                    settingsKeys.forceActiveFocus()
-                  }
-                }
 
-                // Web flags live in a separate user-editable file
-                // (obscure.flags.json): Edit opens it in the configured editor,
-                // Reload re-reads it live (no shell restart). Rendered as a
-                // labelled settings row like the toggles above (title + caption
-                // + right-aligned control) so it reads as one of the panel's
-                // controls, not a stray button pair. Keyboard: L/R step the
-                // row's action, Enter fires the lit one — same contract as the
-                // Apply/Close pair below.
-                BorderSurface {
-                  id: configFileRow
-                  width: parent.width
-                  implicitWidth: Style.space(240)
-                  radius: Style.cornerRadius
-                  implicitHeight: Math.max(54, configRowContent.implicitHeight + Style.spacing.huge)
+                  Toggle {
+                    id: showFilesToggle
+                    width: parent.width
+                    label: "Files Island"
+                    description: "Show the FILES search button"
+                    checked: root.draftShowFiles
+                    hasCursor: root.settingsIndex === 2
+                    onHovered: function(h) { if (h) root.settingsIndex = 2 }
+                    onClicked: root.draftShowFiles = !root.draftShowFiles
+                  }
 
-                  readonly property bool _hot: root.settingsIndex === 12
-                  readonly property var _borderSpec: Border.controlSpec(_hot ? "hover-cursor" : "normal", Color.foreground, Color.accent)
+                  Toggle {
+                    id: animationsToggle
+                    width: parent.width
+                    label: "Animations"
+                    description: "Smooth panel resize, island collapse, fades and color shifts; off = instant response"
+                    checked: root.draftAnimations
+                    hasCursor: root.settingsIndex === 3
+                    onHovered: function(h) { if (h) root.settingsIndex = 3 }
+                    onClicked: root.draftAnimations = !root.draftAnimations
+                  }
 
-                  color: Style.controlFill(false, _hot, Color.foreground, Color.accent)
-                  borderSpec: _borderSpec
+                  Toggle {
+                    id: showBarIconToggle
+                    width: parent.width
+                    label: "Bar Icon"
+                    description: "Show the magnifier button in the top bar (hotkeys keep working)"
+                    checked: root.draftBarIcon
+                    hasCursor: root.settingsIndex === 4
+                    onHovered: function(h) { if (h) root.settingsIndex = 4 }
+                    onClicked: root.draftBarIcon = !root.draftBarIcon
+                  }
 
-                  Behavior on color { ColorAnimation { duration: 100 } }
+                  SegmentedToggle {
+                    id: appsViewToggle
+                    width: parent.width
+                    label: "Apps View"
+                    options: [
+                      { value: "grid", label: "Grid" },
+                      { value: "list", label: "List" }
+                    ]
+                    value: root.draftAppsView
+                    hasCursor: root.settingsIndex === 5
+                    onHovered: function(h) { if (h) root.settingsIndex = 5 }
+                    onChanged: function(value) { root.draftAppsView = value }
+                  }
 
+                  PanelSeparator {
+                    width: parent.width
+                  }
+
+                  // ---- Search ----
+                  PanelSectionHeader {
+                    width: parent.width
+                    text: "Search"
+                    fontSize: Style.font.subtitle
+                  }
+
+                  SegmentedToggle {
+                    id: defaultModeToggle
+                    width: parent.width
+                    label: "Default Search Mode"
+                    options: [
+                      { value: "auto", label: "Auto" },
+                      { value: "apps", label: "Apps" },
+                      { value: "files", label: "Files" }
+                    ]
+                    value: root.draftDefaultMode
+                    hasCursor: root.settingsIndex === 6
+                    onHovered: function(h) { if (h) root.settingsIndex = 6 }
+                    onChanged: function(value) { root.draftDefaultMode = value }
+                  }
+
+                  // Flags prefilled into the query line on every open. This used
+                  // to be a bare full-width field whose only name was its
+                  // placeholder — it read as an orphan input. Now it is a label
+                  // + control pair like the two rows below it.
                   Row {
-                    id: configRowContent
-                    anchors.left: parent.left
-                    anchors.right: parent.right
-                    anchors.verticalCenter: parent.verticalCenter
-                    anchors.leftMargin: configFileRow.borderLeft + Style.spacing.rowPaddingX
-                    anchors.rightMargin: configFileRow.borderRight + Style.spacing.rowPaddingX
+                  id: defaultFlagsRow
+                    width: parent.width
                     spacing: Style.spacing.rowPaddingX
 
-                    Column {
-                      width: parent.width - configRowBtns.width - parent.spacing
-                      spacing: Style.spacing.xs
+                    Text {
+                      id: defaultFlagsLabel
+                      // Row titles elsewhere in this panel (Ui/Toggle) are
+                      // bold + subtitle + foreground; match them exactly.
                       anchors.verticalCenter: parent.verticalCenter
-
-                      Text {
-                        textFormat: Text.PlainText
-                        text: "Config file"
-                        color: Color.foreground
-                        font.family: Style.font.family
-                        font.pixelSize: Style.font.subtitle
-                        font.bold: true
-                        elide: Text.ElideRight
-                        width: parent.width
-                      }
-
-                      Text {
-                        textFormat: Text.PlainText
-                        text: "Web search flags live in obscure.flags.json — edit the file or reload it without a restart"
-                        color: Qt.darker(Color.foreground, 1.5)
-                        font.family: Style.font.family
-                        font.pixelSize: Style.font.caption
-                        wrapMode: Text.WordWrap
-                        width: parent.width
-                      }
+                      textFormat: Text.PlainText
+                      text: "Pre-filled Flags"
+                      color: Color.foreground
+                      font.family: Style.font.family
+                      font.pixelSize: Style.font.subtitle
+                      font.bold: true
+                      elide: Text.ElideRight
                     }
 
-                    // Primary action sits rightmost, mirroring Apply/Close.
+                    TextField {
+                      id: defaultFlagsField
+                      // Everything the label leaves, so the box runs to the
+                      // panel's right edge (see historyField for why this is
+                      // not a TextMetrics probe).
+                      width: Math.max(0, parent.width - defaultFlagsLabel.implicitWidth - parent.spacing)
+                      placeholderText: "Flags prefilled on open  e.g. -g -. -p"
+                      hasCursor: root.settingsIndex === 7
+                      onHoveredChanged: if (defaultFlagsField.hovered) root.settingsIndex = 7
+                      onTextChanged: {
+                        // Guarded: never echo an external set back into the draft,
+                        // so the caret is not yanked around while typing.
+                        if (root.draftDefaultFlags !== text)
+                          root.draftDefaultFlags = text
+                      }
+                      Connections {
+                        target: root
+                        function onDraftDefaultFlagsChanged() {
+                          if (defaultFlagsField.text !== root.draftDefaultFlags && !defaultFlagsField.activeFocus)
+                            defaultFlagsField.text = root.draftDefaultFlags
+                        }
+                      }
+                      // The field owns the keys while focused (settingsKeys is
+                      // blocked); a single-line editor has no use for Up/Down so
+                      // they leave the editor and keep walking the settings
+                      // cursor. Enter jumps straight to Apply; Esc just drops
+                      // back out to the field's row.
+                      Keys.onDownPressed: function(event) {
+                        event.accepted = true
+                        settingsKeys.forceActiveFocus()
+                        root.settingsMove(1)
+                      }
+                      Keys.onUpPressed: function(event) {
+                        event.accepted = true
+                        settingsKeys.forceActiveFocus()
+                        root.settingsMove(-1)
+                      }
+                      Keys.onReturnPressed: function(event) {
+                        event.accepted = true
+                        settingsKeys.forceActiveFocus()
+                        root.settingsIndex = 14
+                      }
+                      Keys.onEnterPressed: function(event) {
+                        event.accepted = true
+                        settingsKeys.forceActiveFocus()
+                        root.settingsIndex = 14
+                      }
+                      Keys.onEscapePressed: function(event) {
+                        // First Esc drops out of the editor back to the settings
+                        // cursor (the panel's own Esc then closes settings).
+                        event.accepted = true
+                        settingsKeys.forceActiveFocus()
+                      }
+                    }
+                  }
+
+                  // Resend-query cap. A labelled number box, NOT another
+                  // full-width field: the value is 0..200, so six digits is
+                  // plenty and the row reads like a label + control pair
+                  // instead of stretching the input across the whole panel.
+                  Row {
+                  id: historyRow
+                    width: parent.width
+                    spacing: Style.spacing.rowPaddingX
+
+                    Text {
+                      id: historyLabel
+                      // Row titles elsewhere in this panel (Ui/Toggle) are
+                      // bold + subtitle + foreground; match them exactly.
+                      anchors.verticalCenter: parent.verticalCenter
+                      textFormat: Text.PlainText
+                      text: "Query History"
+                      color: Color.foreground
+                      font.family: Style.font.family
+                      font.pixelSize: Style.font.subtitle
+                      font.bold: true
+                      elide: Text.ElideRight
+                    }
+
+                    TextField {
+                      id: historyField
+                      // Everything the label leaves, so the box runs to the
+                      // panel's right edge. NOT a TextMetrics probe: that copies
+                      // the kit font before it resolves and measured 0 here,
+                      // which collapsed the field to a sliver.
+                      width: Math.max(0, parent.width - historyLabel.implicitWidth - parent.spacing)
+                      placeholderText: "10"
+                      hasCursor: root.settingsIndex === 8
+                      onHoveredChanged: if (historyField.hovered) root.settingsIndex = 8
+                      onTextChanged: {
+                        var digits = text.replace(/[^0-9]/g, "")
+                        if (digits !== text) {
+                          text = digits
+                          cursorPosition = digits.length
+                        }
+                        if (root.draftHistory !== text) root.draftHistory = text
+                      }
+                      Connections {
+                        target: root
+                        function onDraftHistoryChanged() {
+                          if (historyField.text !== root.draftHistory && !historyField.activeFocus)
+                            historyField.text = root.draftHistory
+                        }
+                      }
+                      // The field owns the keys while focused (settingsKeys is
+                      // blocked): Up/Down leave the editor and keep walking the
+                      // settings cursor, Enter jumps straight to Apply, Esc just
+                      // drops back out — the same contract as the flags editor.
+                      Keys.onDownPressed: function(event) {
+                        event.accepted = true
+                        settingsKeys.forceActiveFocus()
+                        root.settingsMove(1)
+                      }
+                      Keys.onUpPressed: function(event) {
+                        event.accepted = true
+                        settingsKeys.forceActiveFocus()
+                        root.settingsMove(-1)
+                      }
+                      Keys.onReturnPressed: function(event) {
+                        event.accepted = true
+                        settingsKeys.forceActiveFocus()
+                        root.settingsIndex = 14
+                      }
+                      Keys.onEnterPressed: function(event) {
+                        event.accepted = true
+                        settingsKeys.forceActiveFocus()
+                        root.settingsIndex = 14
+                      }
+                      Keys.onEscapePressed: function(event) {
+                        event.accepted = true
+                        settingsKeys.forceActiveFocus()
+                      }
+                    }
+                  }
+
+                  // Web flags live in a separate user-editable file
+                  // (obscure.flags.json): Edit opens it in the configured editor,
+                  // Reload re-reads it live (no shell restart). Rendered as a
+                  // labelled settings row like the toggles above (title + caption
+                  // + right-aligned control) so it reads as one of the panel's
+                  // controls, not a stray button pair. Keyboard: L/R step the
+                  // row's action, Enter fires the lit one — same contract as the
+                  // Apply/Close pair below.
+                  BorderSurface {
+                    id: configFileRow
+                    width: parent.width
+                    implicitWidth: Style.space(240)
+                    radius: Style.cornerRadius
+                    implicitHeight: Math.max(54, configRowContent.implicitHeight + Style.spacing.huge)
+
+                    readonly property bool _hot: root.settingsIndex === 9
+                    readonly property var _borderSpec: Border.controlSpec(_hot ? "hover-cursor" : "normal", Color.foreground, Color.accent)
+
+                    color: Style.controlFill(false, _hot, Color.foreground, Color.accent)
+                    borderSpec: _borderSpec
+
+                    Behavior on color { ColorAnimation { duration: 100 } }
+
                     Row {
-                      id: configRowBtns
-                      layoutDirection: Qt.RightToLeft
-                      spacing: Style.spacing.md
+                      id: configRowContent
+                      anchors.left: parent.left
+                      anchors.right: parent.right
                       anchors.verticalCenter: parent.verticalCenter
+                      anchors.leftMargin: configFileRow.borderLeft + Style.spacing.rowPaddingX
+                      anchors.rightMargin: configFileRow.borderRight + Style.spacing.rowPaddingX
+                      spacing: Style.spacing.rowPaddingX
 
-                      Button {
-                        id: configEditButton
-                        text: "Edit config"
-                        selected: root.draftConfigAction === "edit"
-                        hasCursor: root.settingsIndex === 12 && root.draftConfigAction === "edit"
-                        onHovered: function(h) {
-                          if (!h) return
-                          root.settingsIndex = 12
-                          root.draftConfigAction = "edit"
-                        }
-                        onClicked: {
-                          root.draftConfigAction = "edit"
-                          root.configActivate()
+                      Column {
+                        width: parent.width - configRowBtns.width - parent.spacing
+                        spacing: Style.spacing.xs
+                        anchors.verticalCenter: parent.verticalCenter
+
+                        Text {
+                          textFormat: Text.PlainText
+                          text: "User Flags File"
+                          color: Color.foreground
+                          font.family: Style.font.family
+                          font.pixelSize: Style.font.subtitle
+                          font.bold: true
+                          elide: Text.ElideRight
+                          width: parent.width
                         }
 
-                        // Same blink guard as Apply: the cursor fill is dimmer
-                        // than the selected fill, so an explicit accent ring
-                        // names the Enter target.
-                        Rectangle {
-                          anchors.fill: parent
-                          visible: configEditButton.hasCursor
-                          color: "transparent"
-                          border.color: Color.accent
-                          border.width: Math.max(1, Style.space(2))
-                          radius: Math.max(0, Style.cornerRadius - 1)
-                          Behavior on opacity { NumberAnimation { duration: root.animMs(120) } }
+                        Text {
+                          textFormat: Text.PlainText
+                          text: "Web search flags live in obscure.flags.json — edit the file or reload it without a restart"
+                          color: Qt.darker(Color.foreground, 1.5)
+                          font.family: Style.font.family
+                          font.pixelSize: Style.font.caption
+                          wrapMode: Text.WordWrap
+                          width: parent.width
                         }
                       }
 
-                      Button {
-                        id: configReloadButton
-                        text: "Reload flags"
-                        selected: root.draftConfigAction === "reload"
-                        hasCursor: root.settingsIndex === 12 && root.draftConfigAction === "reload"
-                        onHovered: function(h) {
-                          if (!h) return
-                          root.settingsIndex = 12
-                          root.draftConfigAction = "reload"
-                        }
-                        onClicked: {
-                          root.draftConfigAction = "reload"
-                          root.configActivate()
+                      // Primary action sits rightmost, mirroring Apply/Close.
+                      Row {
+                        id: configRowBtns
+                        layoutDirection: Qt.RightToLeft
+                        spacing: Style.spacing.md
+                        anchors.verticalCenter: parent.verticalCenter
+
+                        Button {
+                          id: configEditButton
+                          text: "Edit Config"
+                          selected: root.draftConfigAction === "edit"
+                          hasCursor: root.settingsIndex === 9 && root.draftConfigAction === "edit"
+                          onHovered: function(h) {
+                            if (!h) return
+                            root.settingsIndex = 9
+                            root.draftConfigAction = "edit"
+                          }
+                          onClicked: {
+                            root.draftConfigAction = "edit"
+                            root.configActivate()
+                          }
+
+                          // Same blink guard as Apply: the cursor fill is dimmer
+                          // than the selected fill, so an explicit accent ring
+                          // names the Enter target.
+                          Rectangle {
+                            anchors.fill: parent
+                            visible: configEditButton.hasCursor
+                            color: "transparent"
+                            border.color: Color.accent
+                            border.width: Math.max(1, Style.space(2))
+                            radius: Math.max(0, Style.cornerRadius - 1)
+                            Behavior on opacity { NumberAnimation { duration: root.animMs(120) } }
+                          }
                         }
 
-                        Rectangle {
-                          anchors.fill: parent
-                          visible: configReloadButton.hasCursor
-                          color: "transparent"
-                          border.color: Color.accent
-                          border.width: Math.max(1, Style.space(2))
-                          radius: Math.max(0, Style.cornerRadius - 1)
-                          Behavior on opacity { NumberAnimation { duration: root.animMs(120) } }
+                        Button {
+                          id: configReloadButton
+                          text: "Reload Flags"
+                          selected: root.draftConfigAction === "reload"
+                          hasCursor: root.settingsIndex === 9 && root.draftConfigAction === "reload"
+                          onHovered: function(h) {
+                            if (!h) return
+                            root.settingsIndex = 9
+                            root.draftConfigAction = "reload"
+                          }
+                          onClicked: {
+                            root.draftConfigAction = "reload"
+                            root.configActivate()
+                          }
+
+                          Rectangle {
+                            anchors.fill: parent
+                            visible: configReloadButton.hasCursor
+                            color: "transparent"
+                            border.color: Color.accent
+                            border.width: Math.max(1, Style.space(2))
+                            radius: Math.max(0, Style.cornerRadius - 1)
+                            Behavior on opacity { NumberAnimation { duration: root.animMs(120) } }
+                          }
                         }
                       }
                     }
+
+                    HoverHandler {
+                      onHoveredChanged: function(h) { if (h) root.settingsIndex = 9 }
+                    }
                   }
 
-                  HoverHandler {
-                    onHoveredChanged: function(h) { if (h) root.settingsIndex = 12 }
+                  Toggle {
+                    id: showHiddenToggle
+                    width: parent.width
+                    label: "Show hidden by default"
+                    description: "Include dotfiles in file and directory searches"
+                    checked: root.draftShowHidden
+                    hasCursor: root.settingsIndex === 10
+                    onHovered: function(h) { if (h) root.settingsIndex = 10 }
+                    onClicked: root.draftShowHidden = !root.draftShowHidden
                   }
-                }
 
-                Row {
-                  width: parent.width
-                  layoutDirection: Qt.RightToLeft
-                  spacing: Style.spacing.md
-                  Button {
-                    id: applyButton
-                    text: "Apply"
-                    selected: true
+                  PanelSeparator {
+                    width: parent.width
+                  }
+
+                  // ---- Shell ----
+                  PanelSectionHeader {
+                    width: parent.width
+                    text: "Shell"
+                    fontSize: Style.font.subtitle
+                  }
+
+                  // Master switch for everything that hands a command line to a
+                  // shell: -r, Ctrl+0 (which just prefills "-r ") and mixed
+                  // batches like "-g -r". With it off dispatchShell() refuses and
+                  // the card stays open saying so, so nothing runs silently.
+                  SegmentedToggle {
+                    id: allowRunToggle
+                    width: parent.width
+                    label: "Run Shell Commands"
+                    description: "Allow -r and Ctrl+0 to run commands — off refuses every shell command"
+                    options: [
+                      { value: "on", label: "On" },
+                      { value: "off", label: "Off" }
+                    ]
+                    value: root.draftAllowRun
+                    hasCursor: root.settingsIndex === 11
+                    onHovered: function(h) { if (h) root.settingsIndex = 11 }
+                    onChanged: function(value) { root.draftAllowRun = value }
+                  }
+
+                  Toggle {
+                    id: confirmRunToggle
+                    width: parent.width
+                    label: "Shell Command Warning"
+                    description: "Press Enter twice to run -r / Ctrl+0 commands instead of running them instantly"
+                    checked: root.draftConfirmRun
+                    hasCursor: root.settingsIndex === 12
+                    onHovered: function(h) { if (h) root.settingsIndex = 12 }
+                    onClicked: root.draftConfirmRun = !root.draftConfirmRun
+                  }
+
+                  SegmentedToggle {
+                    id: runModeToggle
+                    width: parent.width
+                    label: "Run -r in"
+                    options: [
+                      { value: "silent", label: "Silent" },
+                      { value: "external", label: "External terminal" }
+                    ]
+                    value: root.draftRunTarget
                     hasCursor: root.settingsIndex === 13
                     onHovered: function(h) { if (h) root.settingsIndex = 13 }
-                    onClicked: root.settingsApply()
+                    onChanged: function(value) { root.draftRunTarget = value }
+                  }
 
-                    // Apply is permanently emphasized via `selected`, whose
-                    // fill is STRONGER than the kit's hover-cursor fill — so
-                    // the cursor landing on it used to look like the highlight
-                    // vanished ("falls into empty space") and Close then made
-                    // both buttons read as lit. Give the cursor an explicit
-                    // accent ring so the walk target is always unambiguous.
-                    Rectangle {
-                      anchors.fill: parent
-                      visible: applyButton.hasCursor
-                      color: "transparent"
-                      border.color: Color.accent
-                      border.width: Math.max(1, Style.space(2))
-                      radius: Math.max(0, Style.cornerRadius - 1)
-                      Behavior on opacity { NumberAnimation { duration: root.animMs(120) } }
+                  Row {
+                    width: parent.width
+                    layoutDirection: Qt.RightToLeft
+                    spacing: Style.spacing.md
+                    Button {
+                      id: applyButton
+                      text: "Apply"
+                      selected: true
+                      hasCursor: root.settingsIndex === 14
+                      onHovered: function(h) { if (h) root.settingsIndex = 14 }
+                      onClicked: root.settingsApply()
+
+                      // Apply is permanently emphasized via `selected`, whose
+                      // fill is STRONGER than the kit's hover-cursor fill — so
+                      // the cursor landing on it used to look like the highlight
+                      // vanished ("falls into empty space") and Close then made
+                      // both buttons read as lit. Give the cursor an explicit
+                      // accent ring so the walk target is always unambiguous.
+                      Rectangle {
+                        anchors.fill: parent
+                        visible: applyButton.hasCursor
+                        color: "transparent"
+                        border.color: Color.accent
+                        border.width: Math.max(1, Style.space(2))
+                        radius: Math.max(0, Style.cornerRadius - 1)
+                        Behavior on opacity { NumberAnimation { duration: root.animMs(120) } }
+                      }
+                    }
+                    Button {
+                      id: closeButton
+                      text: "Close"
+                      hasCursor: root.settingsIndex === 15
+                      onHovered: function(h) { if (h) root.settingsIndex = 15 }
+                      onClicked: root.exitSettings()
                     }
                   }
-                  Button {
-                    id: closeButton
-                    text: "Close"
-                    hasCursor: root.settingsIndex === 14
-                    onHovered: function(h) { if (h) root.settingsIndex = 14 }
-                    onClicked: root.exitSettings()
+
+                  // Status line for actions fired from this panel (Reload flags,
+                  // or a refused shell command): the search-line hint is hidden
+                  // while settings is open, so that feedback has to land here.
+                  // Visible only while a flash is active, so it costs no height
+                  // otherwise (Column skips invisible children).
+                  Text {
+                    visible: root.flashActive
+                    width: parent.width
+                    height: Style.space(24)
+                    text: root.flashNote
+                    font.family: Style.font.menuFamily
+                    font.pixelSize: Style.font.caption
+                    color: root._resultGood === null ? root.dimColor
+                      : root._resultGood ? Color.accent : Color.urgent
+                    horizontalAlignment: Text.AlignHCenter
+                    elide: Text.ElideRight
                   }
                 }
-
-                // Status line for actions fired from this panel (currently the
-                // Config-file Reload): the search-line hint is hidden while
-                // settings is open, so reload feedback has to land here.
-                // Visible only while a flash is active, so it costs no height
-                // otherwise (Column skips invisible children).
-                Text {
-                  visible: root.flashActive
-                  width: parent.width
-                  height: Style.space(24)
-                  text: root.flashNote
-                  font.family: Style.font.menuFamily
-                  font.pixelSize: Style.font.caption
-                  color: root._resultGood === null ? root.dimColor
-                    : root._resultGood ? Color.accent : Color.urgent
-                  horizontalAlignment: Text.AlignHCenter
-                  elide: Text.ElideRight
-                }
               }
+            }
+            // Thin scroll indicator for the clamped settings panel — same shape
+            // as the help list's. Screen-dependent: on a tall display the panel
+            // fits and this stays invisible.
+            Rectangle {
+              id: settingsScrollbar
+              anchors.right: parent.right
+              anchors.rightMargin: Style.space(2)
+              width: Style.spacing.hairline
+              radius: width
+              color: Util.alpha(root.dimColor, 0.55)
+              visible: settingsFlick.contentHeight > settingsFlick.height + 1
+              height: Math.max(Style.space(24),
+                parent.height * Math.min(1, settingsFlick.height / settingsFlick.contentHeight))
+              y: (parent.height - height) * Math.max(0, Math.min(1,
+                settingsFlick.contentHeight > settingsFlick.height
+                  ? settingsFlick.contentY / (settingsFlick.contentHeight - settingsFlick.height)
+                  : 0))
             }
           }
 
