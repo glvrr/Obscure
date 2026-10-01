@@ -12,6 +12,17 @@ type. Quickshell/QML plugin, no background service, no telemetry.
   └──────────────────────────────────────────────┘
 ```
 
+## Screenshots
+
+|  |  |
+|---|---|
+| <a href="https://raw.githubusercontent.com/glvrr/obcr_media/main/Screenshots/obsc_scrn-1.png"><img src="https://raw.githubusercontent.com/glvrr/obcr_media/main/Screenshots/obsc_scrn-1.png" width="480" alt="Obscure"></a> | <a href="https://raw.githubusercontent.com/glvrr/obcr_media/main/Screenshots/obsc_scrn-2.png"><img src="https://raw.githubusercontent.com/glvrr/obcr_media/main/Screenshots/obsc_scrn-2.png" width="480" alt="Obscure"></a> |
+| <a href="https://raw.githubusercontent.com/glvrr/obcr_media/main/Screenshots/obsc_scrn-3.png"><img src="https://raw.githubusercontent.com/glvrr/obcr_media/main/Screenshots/obsc_scrn-3.png" width="480" alt="Obscure"></a> | <a href="https://raw.githubusercontent.com/glvrr/obcr_media/main/Screenshots/obsc_scrn-4.png"><img src="https://raw.githubusercontent.com/glvrr/obcr_media/main/Screenshots/obsc_scrn-4.png" width="480" alt="Obscure"></a> |
+| <a href="https://raw.githubusercontent.com/glvrr/obcr_media/main/Screenshots/obsc_scrn-5.png"><img src="https://raw.githubusercontent.com/glvrr/obcr_media/main/Screenshots/obsc_scrn-5.png" width="480" alt="Obscure"></a> | <a href="https://raw.githubusercontent.com/glvrr/obcr_media/main/Screenshots/obsc_scrn-6.png"><img src="https://raw.githubusercontent.com/glvrr/obcr_media/main/Screenshots/obsc_scrn-6.png" width="480" alt="Obscure"></a> |
+
+Images live in [glvrr/obcr_media](https://github.com/glvrr/obcr_media), so they
+stay out of this repository (and out of every `git clone`).
+
 ## Requirements
 
 - Omarchy with the Quickshell-based `omarchy-shell` (the plugin system;
