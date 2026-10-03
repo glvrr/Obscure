@@ -37,6 +37,10 @@ Item {
   // Ctrl+0); off = execute instantly. Default ON: silent shell execution is
   // otherwise one keystroke away from a search typo.
   property bool confirmRun: true
+  // Files rows show a shortened path instead of the full one (see
+  // Spotlight.shortPath). Default OFF: it is purely cosmetic, so a fresh
+  // install and an upgraded one both keep the full paths they have now.
+  property bool shortPaths: false
   // Where a -r / Ctrl+0 command runs: "silent" spawns bash in the background
   // (invisible), "external" runs it in the system terminal via `omarchy launch
   // terminal` — the same channel the -oc flag uses.
@@ -102,6 +106,7 @@ Item {
     // breaking -r on upgrade. A brand-new install has no file at all (hasConfig
     // false) and starts off.
     root.allowRun = hasConfig ? (o.allowRun === undefined ? true : !!o.allowRun) : false
+    root.shortPaths = !!o.shortPaths
     root.confirmRun = o.confirmRun === undefined ? true : !!o.confirmRun
     root.runTarget = o.runTarget === "external" ? "external" : "silent"
     // Kept verbatim (no trim): "-g " with its trailing space must stay so the
@@ -133,6 +138,7 @@ Item {
         appsView: root.appsView,
         showBarIcon: root.showBarIcon,
         allowRun: root.allowRun,
+        shortPaths: root.shortPaths,
         confirmRun: root.confirmRun,
         runTarget: root.runTarget,
         defaultFlags: root.defaultFlags,

@@ -81,6 +81,7 @@ Item {
   property bool draftAnimations: true
   // Master switch for -r / Ctrl+0, as text while editing ("on" | "off").
   property string draftAllowRun: "off"
+  property bool draftShortPaths: false
   property bool draftConfirmRun: true
   property string draftRunTarget: "silent"
   property bool draftBarIcon: true
@@ -392,6 +393,27 @@ Item {
     return rows
   }
 
+  // ---- file row display ----
+
+  // "Short paths View" setting: replace the leading part of a file's path with
+  // one dot per directory level, keeping the folder the file sits in and its
+  // name, e.g. /home/glvr/QS_Spotlight/Spotlight.qml renders as
+  // ".../QS_Spotlight/Spotlight.qml" (the folder QS_Spotlight is 3 levels below
+  // the root) and /home/glvr/file.txt as "../glvr/file.txt". So the row stops
+  // repeating the home prefix on every line while still saying how buried the
+  // file is. DISPLAY ONLY: matching, the Tab completion (suggestionText) and
+  // the open-file.sh launch all keep using the full path.
+  function shortPath(p) {
+    var s = String(p || "")
+    // Empty segments come from the leading "/" (and any trailing slash).
+    var parts = s.split("/").filter(function(x) { return x !== "" })
+    // Fewer than two components means "/" itself — nothing to shorten.
+    if (parts.length < 2) return s
+    var dots = ""
+    for (var i = 0; i < parts.length - 1; i++) dots += "."
+    return dots + "/" + parts[parts.length - 2] + "/" + parts[parts.length - 1]
+  }
+
   // ---- resend query rows ----
   // The dropdown only offers itself when the mechanism is on and the line has
   // nothing typed in it. Flags do NOT block it (a defaultFlags prefill like
@@ -543,6 +565,7 @@ Item {
     historyRow,
     configFileRow,
     showHiddenToggle,
+    shortPathsToggle,
     allowRunToggle,
     confirmRunToggle,
     runModeToggle,
@@ -673,6 +696,7 @@ Item {
     root.draftShowHidden = store.showHidden
     root.draftAnimations = store.animations
     root.draftAllowRun = store.allowRun ? "on" : "off"
+    root.draftShortPaths = store.shortPaths
     root.draftConfirmRun = store.confirmRun
     root.draftRunTarget = store.runTarget
     root.draftBarIcon = store.showBarIcon
@@ -686,24 +710,24 @@ Item {
   // Vertical walk (Up/Down + j/k) over the three sections:
   //   Visuals  0..5  (O island, Apps island, Files island, Animations,
   //                   Bar icon, Apps view)
-  //   Search   6..10 (Default search mode, Pre-filled flags, Query history,
-  //                   User flags file, Show hidden)
-  //   Shell   11..13 (Run shell commands, Shell command warning, Run -r in)
-  // 14/15 are the Apply/Close buttons — ONE vertical target: Down from the last
+  //   Search   6..11 (Default search mode, Pre-filled flags, Query history,
+  //                   User flags file, Show hidden, Short paths view)
+  //   Shell   12..14 (Run shell commands, Shell command warning, Run -r in)
+  // 15/16 are the Apply/Close buttons — ONE vertical target: Down from the last
   // row enters it (landing on Apply), Down while inside is a no-op (nothing
   // sits below and Down must never pick a button — switching Apply/Close is
-  // Left/Right only), Up leaves back to row 13. Above row 0 the walk is
+  // Left/Right only), Up leaves back to row 14. Above row 0 the walk is
   // bounded, no wrap.
   function settingsMove(dir) {
-    if (root.settingsIndex >= 14) {
+    if (root.settingsIndex >= 15) {
       if (dir < 0) {
-        root.settingsIndex = 13
+        root.settingsIndex = 14
         root.settingsReveal()
       }
       return
     }
     var next = root.settingsIndex + dir
-    root.settingsIndex = next > 13 ? 14 : Math.max(0, next)
+    root.settingsIndex = next > 14 ? 15 : Math.max(0, next)
     root.settingsReveal()
   }
 
@@ -726,7 +750,7 @@ Item {
   // buttons, so keyboard users can reach Close directly with the tab chain
   // (vertical walk treats the button row as a single unit).
   function settingsTab(dir) {
-    var n = 16 // toggles x6 + segmented rows x4 + history + flags + config + Apply + Close
+    var n = 17 // toggles x7 + segmented rows x4 + history + flags + config + Apply + Close
     root.settingsIndex = (root.settingsIndex + dir + n) % n
     root.settingsReveal()
   }
@@ -737,8 +761,8 @@ Item {
   // while focused).
   function settingsHorizontal(dir) {
     if (dir === 0) return
-    if (root.settingsIndex >= 14) {
-      root.settingsIndex = root.settingsIndex === 14 ? 15 : 14
+    if (root.settingsIndex >= 15) {
+      root.settingsIndex = root.settingsIndex === 15 ? 16 : 15
       root.settingsReveal()
       return
     }
@@ -754,11 +778,11 @@ Item {
       root.draftConfigAction = root.dropdownStep([{ value: "edit" }, { value: "reload" }], root.draftConfigAction, dir)
       return
     }
-    if (root.settingsIndex === 11) {
+    if (root.settingsIndex === 12) {
       root.draftAllowRun = root.dropdownStep(allowRunToggle.options, root.draftAllowRun, dir)
       return
     }
-    if (root.settingsIndex === 13) {
+    if (root.settingsIndex === 14) {
       root.draftRunTarget = root.dropdownStep(runModeToggle.options, root.draftRunTarget, dir)
       return
     }
@@ -770,7 +794,8 @@ Item {
     case 3: animationsToggle.clicked(); break
     case 4: showBarIconToggle.clicked(); break
     case 10: showHiddenToggle.clicked(); break
-    case 12: confirmRunToggle.clicked(); break
+    case 11: shortPathsToggle.clicked(); break
+    case 13: confirmRunToggle.clicked(); break
     }
   }
 
@@ -810,12 +835,13 @@ Item {
     case 9:
       root.configActivate(); break
     case 10: showHiddenToggle.clicked(); break
-    case 11: root.draftAllowRun = root.dropdownStep(allowRunToggle.options, root.draftAllowRun, 1); break
-    case 12: confirmRunToggle.clicked(); break
-    case 13: root.draftRunTarget = root.dropdownStep(runModeToggle.options, root.draftRunTarget, 1); break
-    case 14:
-      root.settingsApply(); break
+    case 11: shortPathsToggle.clicked(); break
+    case 12: root.draftAllowRun = root.dropdownStep(allowRunToggle.options, root.draftAllowRun, 1); break
+    case 13: confirmRunToggle.clicked(); break
+    case 14: root.draftRunTarget = root.dropdownStep(runModeToggle.options, root.draftRunTarget, 1); break
     case 15:
+      root.settingsApply(); break
+    case 16:
       root.exitSettings(); break
     }
   }
@@ -830,6 +856,7 @@ Item {
     store.showHidden = root.draftShowHidden
     store.animations = root.draftAnimations
     store.allowRun = root.draftAllowRun === "on"
+    store.shortPaths = root.draftShortPaths
     store.confirmRun = root.draftConfirmRun
     store.runTarget = root.draftRunTarget
     store.showBarIcon = root.draftBarIcon
@@ -2346,12 +2373,12 @@ function runErrorTail() {
                       Keys.onReturnPressed: function(event) {
                         event.accepted = true
                         settingsKeys.forceActiveFocus()
-                        root.settingsIndex = 14
+                        root.settingsIndex = 15
                       }
                       Keys.onEnterPressed: function(event) {
                         event.accepted = true
                         settingsKeys.forceActiveFocus()
-                        root.settingsIndex = 14
+                        root.settingsIndex = 15
                       }
                       Keys.onEscapePressed: function(event) {
                         // First Esc drops out of the editor back to the settings
@@ -2427,12 +2454,12 @@ function runErrorTail() {
                       Keys.onReturnPressed: function(event) {
                         event.accepted = true
                         settingsKeys.forceActiveFocus()
-                        root.settingsIndex = 14
+                        root.settingsIndex = 15
                       }
                       Keys.onEnterPressed: function(event) {
                         event.accepted = true
                         settingsKeys.forceActiveFocus()
-                        root.settingsIndex = 14
+                        root.settingsIndex = 15
                       }
                       Keys.onEscapePressed: function(event) {
                         event.accepted = true
@@ -2580,6 +2607,20 @@ function runErrorTail() {
                     onClicked: root.draftShowHidden = !root.draftShowHidden
                   }
 
+                  // File rows show ".../folder/file.ext" instead of the whole path
+                  // (see shortPath()); display only, so activation and the Tab
+                  // completion keep using the full path.
+                  Toggle {
+                    id: shortPathsToggle
+                    width: parent.width
+                    label: "Short paths View"
+                    description: "One dot per directory level instead of the full path: .../folder/file.ext"
+                    checked: root.draftShortPaths
+                    hasCursor: root.settingsIndex === 11
+                    onHovered: function(h) { if (h) root.settingsIndex = 11 }
+                    onClicked: root.draftShortPaths = !root.draftShortPaths
+                  }
+
                   PanelSeparator {
                     width: parent.width
                   }
@@ -2605,8 +2646,8 @@ function runErrorTail() {
                       { value: "off", label: "Off" }
                     ]
                     value: root.draftAllowRun
-                    hasCursor: root.settingsIndex === 11
-                    onHovered: function(h) { if (h) root.settingsIndex = 11 }
+                    hasCursor: root.settingsIndex === 12
+                    onHovered: function(h) { if (h) root.settingsIndex = 12 }
                     onChanged: function(value) { root.draftAllowRun = value }
                   }
 
@@ -2616,8 +2657,8 @@ function runErrorTail() {
                     label: "Shell Command Warning"
                     description: "Press Enter twice to run -r / Ctrl+0 commands instead of running them instantly"
                     checked: root.draftConfirmRun
-                    hasCursor: root.settingsIndex === 12
-                    onHovered: function(h) { if (h) root.settingsIndex = 12 }
+                    hasCursor: root.settingsIndex === 13
+                    onHovered: function(h) { if (h) root.settingsIndex = 13 }
                     onClicked: root.draftConfirmRun = !root.draftConfirmRun
                   }
 
@@ -2630,8 +2671,8 @@ function runErrorTail() {
                       { value: "external", label: "External terminal" }
                     ]
                     value: root.draftRunTarget
-                    hasCursor: root.settingsIndex === 13
-                    onHovered: function(h) { if (h) root.settingsIndex = 13 }
+                    hasCursor: root.settingsIndex === 14
+                    onHovered: function(h) { if (h) root.settingsIndex = 14 }
                     onChanged: function(value) { root.draftRunTarget = value }
                   }
 
@@ -2643,8 +2684,8 @@ function runErrorTail() {
                       id: applyButton
                       text: "Apply"
                       selected: true
-                      hasCursor: root.settingsIndex === 14
-                      onHovered: function(h) { if (h) root.settingsIndex = 14 }
+                      hasCursor: root.settingsIndex === 15
+                      onHovered: function(h) { if (h) root.settingsIndex = 15 }
                       onClicked: root.settingsApply()
 
                       // Apply is permanently emphasized via `selected`, whose
@@ -2666,8 +2707,8 @@ function runErrorTail() {
                     Button {
                       id: closeButton
                       text: "Close"
-                      hasCursor: root.settingsIndex === 15
-                      onHovered: function(h) { if (h) root.settingsIndex = 15 }
+                      hasCursor: root.settingsIndex === 16
+                      onHovered: function(h) { if (h) root.settingsIndex = 16 }
                       onClicked: root.exitSettings()
                     }
                   }
@@ -3310,7 +3351,8 @@ function runErrorTail() {
         anchors.leftMargin: Style.spacing.rowPaddingX + Style.space(36) + Style.spacing.labelGap
         anchors.right: parent.right
         anchors.rightMargin: Style.spacing.rowPaddingX
-        text: (rowItem.isApp || rowItem.isHistory) ? rowItem.label : rowItem.path
+        text: (rowItem.isApp || rowItem.isHistory) ? rowItem.label
+          : (store.shortPaths ? root.shortPath(rowItem.path) : rowItem.path)
         font.family: Style.font.family
         font.pixelSize: Style.font.heading
         font.weight: Font.Medium
