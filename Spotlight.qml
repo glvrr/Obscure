@@ -353,10 +353,15 @@ Item {
     return out
   }
 
-  function ensureApps() {
+  // force: rebuild even when the grid already has entries. Needed after
+  // AppIndex/IconResolver re-scan — the early-return below used to keep the
+  // panel blind to any .desktop installed while the shell was already running
+  // (it only ever saw apps that existed at shell start).
+  function ensureApps(force) {
     root.debugLog("ensureApps shell=" + (root.shell !== null) + " appLibrary=" + (root.appLibrary !== null)
-      + " allApps=" + root.allApps.length + " appIndexReady=" + root.appIndexReady + " busy=" + appIndex.busy)
-    if (root.allApps.length > 0) return
+      + " allApps=" + root.allApps.length + " appIndexReady=" + root.appIndexReady + " busy=" + appIndex.busy
+      + " force=" + !!force)
+    if (root.allApps.length > 0 && !force) return
     if (root.appLibrary) {
       root.appIndexReady = true
       try {
@@ -657,6 +662,11 @@ Item {
     root.gridIndex = 0
     root.disarmPointer()
     root.ensureApps()
+    // Background re-scan for apps/icons installed while the shell has been
+    // up. Both are rate-limited and merge behind the current list, so an
+    // ordinary open costs at most one 16 ms find() and never blanks the grid.
+    if (root.appIndexReady) appIndex.refresh()
+    iconResolver.refresh()
     root.opened = true
     root.refreshResults()
     Qt.callLater(function() {
@@ -1792,10 +1802,16 @@ function runErrorTail() {
     onLoaded: {
       root.debugLog("appIndex loaded apps=" + appIndex.apps.length)
       root.appIndexReady = true
-      root.ensureApps()
+      // force: after a refresh the list is already populated, and the plain
+      // call would early-return and leave the stale grid on screen.
+      root.ensureApps(true)
       if (root.allApps.length === 0) return
       appRetry.stop()
-      if (root.opened) root.refreshResults()
+      // No refreshResults() here: it would reset the selection to row 0 AND
+      // cancel a running file search, both of which must survive a background
+      // re-scan while the panel is open. The onGridItemsChanged/
+      // onDisplayRowsChanged watchers already refill the row models from the
+      // new allApps, leaving the query and the selection untouched.
     }
   }
 
@@ -1812,7 +1828,8 @@ function runErrorTail() {
     if (root.allApps.length === 0) { root.ensureApps(); return }
     root.allApps = root.buildGridApps(appIndex.apps)
     root.debugLog("iconResolver rebuilt allApps=" + root.allApps.length)
-    if (root.opened) root.refreshResults()
+    // Same reason as AppIndex.onLoaded: the row-model watchers pick the new
+    // icons/entries up without disturbing the live query or the selection.
   }
 
   // ---- window ----

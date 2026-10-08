@@ -21,8 +21,26 @@ Item {
 
   readonly property string generic: "application-x-executable"
 
+  property double lastScan: 0
+
   function start() {
     if (proc.running || root.ready) return
+    root._run()
+  }
+
+  // Re-scan for icon files installed while the shell has been up (same blind
+  // spot as AppIndex). The index is MERGED, never cleared — keys already found
+  // keep their first path, so nothing on screen changes while 32k files are
+  // walked in the background — and it is throttled to once a minute because
+  // the walk takes ~1.2 s (the app index scan next to it takes 16 ms, which
+  // is why that one is allowed on every open).
+  function refresh() {
+    if (proc.running || !root.ready) return
+    if (Date.now() - root.lastScan < 60000) return
+    root._run()
+  }
+
+  function _run() {
     proc.command = ["bash", "-c",
       "dirs=\"$HOME/.icons $HOME/.local/share/icons /usr/share/icons\";\n" +
       "for d in $dirs; do [ -d \"$d\" ] || continue; find \"$d\" -type f \\( -iname '*.png' -o -iname '*.svg' -o -iname '*.xpm' \\) 2>/dev/null; done"]
@@ -72,6 +90,7 @@ Item {
     }
     onExited: function(exitCode, exitStatus) {
       root.ready = true
+      root.lastScan = Date.now()
       root.index[root.generic] = root.index[root.generic] || ""
       if (Quickshell.env("OMARCHY_SPOTLIGHT_DEBUG") === "1") {
         var count = 0

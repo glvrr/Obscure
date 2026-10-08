@@ -19,12 +19,33 @@ Item {
 property var apps: ([])
   property bool busy: false
   property var _seen: ({})
+  property var _pending: ([])
+  property double lastScan: 0
 
   function load() {
+    // First run: nothing to show until the scan lands, so blank it up front.
+    root.apps = []
+    root._scan()
+  }
+
+  // Re-scan requested by the UI (panel open). A .desktop installed AFTER the
+  // shell started is otherwise invisible forever: this index only ran at
+  // startup and Spotlight.ensureApps() early-returns once the grid has
+  // entries. Unlike load() the CURRENT list stays on screen — results collect
+  // in _pending and only swap in onExited — so a refresh never blanks the
+  // grid. Rate-limited, and busy-guarded so a burst of opens cannot stack
+  // scans (a second run on the same Process would be dropped).
+  function refresh() {
+    if (root.busy) return
+    if (Date.now() - root.lastScan < 5000) return
+    root._scan()
+  }
+
+  function _scan() {
     if (root.busy) return
     root.busy = true
-    root.apps = []
     root._seen = ({})
+    root._pending = []
     proc.canceled = false
     proc.command = ["bash", "-c", root.cmd]
     proc.running = true
@@ -80,16 +101,22 @@ property var apps: ([])
         if (!id) return
         if (root._seen[id]) return
         root._seen[id] = true
-        root.apps = root.apps.concat([{
+        root._pending.push({
           appId: id,
           label: parts[2] || id,
           icon: parts[3] || ""
-        }])
+        })
       }
     }
     onExited: function(exitCode, exitStatus) {
       root.busy = false
-      if (!proc.canceled) root.loaded()
+      if (proc.canceled) return
+      // Swap the whole list in at once: apps becomes a fresh array object on
+      // every scan, so the property change notifies and nothing flickers
+      // midway through a refresh.
+      root.apps = root._pending
+      root.lastScan = Date.now()
+      root.loaded()
     }
   }
 }
