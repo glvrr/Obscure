@@ -307,7 +307,31 @@ Item {
   readonly property int gridCols: 6
   readonly property int gridVisibleRows: 3
 
-  readonly property var gridItems: root.appMatches(root.stripped, root.allApps.length)
+  readonly property var gridItems: {
+    var m = root.appMatches(root.stripped, root.allApps.length)
+    return root.rankByPrefix(m, root.stripped, function(a) { return [a.label, a.leaf || ""] })
+  }
+
+  // "Type-to-front" for any row list. Prefix matches (name starts with the
+  // query) float above the fuzzy/substring hits; WITHIN each group the incoming
+  // order is preserved exactly (decorate with the original index), so the grid
+  // stays alphabetical, the dropdown keeps its MRU order, and file rows keep
+  // fd's order. An empty query returns the list untouched. `nameFn(row)` yields
+  // the name (or names) to test — apps pass label + desktop-id leaf, files the
+  // basename.
+  function rankByPrefix(rows, q, nameFn) {
+    if (String(q || "").trim() === "" || rows.length === 0) return rows
+    var dec = []
+    for (var i = 0; i < rows.length; i++)
+      dec.push({ r: rows[i], i: i, n: nameFn(rows[i]) })
+    dec.sort(function(a, b) {
+      var d = Search.prefixRank(a.n, q) - Search.prefixRank(b.n, q)
+      return d !== 0 ? d : a.i - b.i
+    })
+    var out = []
+    for (var j = 0; j < dec.length; j++) out.push(dec[j].r)
+    return out
+  }
 
   function appMatches(q, cap) {
     var limit = cap || root.allApps.length
@@ -346,6 +370,7 @@ Item {
         kind: "app",
         appId: appId,
         label: label,
+        leaf: leaf,
         subtext: "",
         iconUrl: it.iconUrl || iconResolver.resolve(icon),
         search: (label + " " + leaf).toLowerCase()
@@ -421,10 +446,14 @@ Item {
   }
 
   // ---- unified auto dropdown (apps + files) ----
-  // The typed app suggestions are the ONLY place "Most used first" reorders:
-  // all matches are ranked by recency and then capped, so a fresh match that is
-  // alphabetically late still surfaces. `appMatches(q, 0)` returns every match.
-  readonly property var appDropRows: root.sortByUsage(root.appMatches(root.stripped, 0)).slice(0, 6)
+  // The typed app suggestions put "Most used first" (MRU) and then "type-to-
+  // front" (prefix) — prefix dominates MRU: a fresh non-prefix app stays below
+  // an app whose name starts with the query. `appMatches(q, 0)` returns every
+  // match, so a prefix hit that is alphabetically late still surfaces before
+  // the 6-row cap is applied.
+  readonly property var appDropRows: root.rankByPrefix(
+    root.sortByUsage(root.appMatches(root.stripped, 0)), root.stripped,
+    function(a) { return [a.label, a.leaf || ""] }).slice(0, 6)
   readonly property var searchRows: {
     var rows = []
     var apps = root.appDropRows
@@ -1800,6 +1829,11 @@ function runErrorTail() {
       for (var i = 0; i < paths.length; i++) {
         rows.push({ kind: isDir ? "dir" : "file", path: paths[i] })
       }
+      // Type-to-front on the file NAME: a path whose basename starts with the
+      // query (e.g. "signal-notes.txt" for "si") ranks above paths where the
+      // query only occurs deeper in the path. fd's own order is kept within
+      // each group.
+      rows = root.rankByPrefix(rows, root.stripped, function(r) { return String(r.path).split("/").pop() })
       root.fileRows = rows
       root.selectedIndex = 0
       root.syncResults()
