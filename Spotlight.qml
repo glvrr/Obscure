@@ -385,14 +385,21 @@ Item {
     if (root.allApps.length === 0) appRetry.restart()
   }
 
-  // App order: most recently launched first (UsageStore.rankMap), then by
-  // label. With ranking off the map is empty, so this degrades to exactly the
-  // old alphabetical sort. `rerankApps` is the notify-after variant: sorting a
-  // JS array in place does NOT fire the property change signal, so the row
-  // models would keep the old order — assigning a fresh slice does.
+  // The app grid (and the apps-as-list screen) is plain alphabetical — the
+  // "Most used first" setting must NOT disturb it. Its ordering lives only in
+  // the typed-suggestion dropdown (see `appDropRows`): sortByUsage reorders a
+  // COPY of the matches by UsageStore.rankMap, label as the tie-break, and an
+  // empty rank map (setting off) leaves the alphabetical order intact.
   function sortApps() {
-    var rank = usage.rankMap
     root.allApps.sort(function(a, b) {
+      return String(a.label).localeCompare(String(b.label))
+    })
+  }
+
+  function sortByUsage(rows) {
+    var rank = usage.rankMap
+    var copy = rows.slice()
+    copy.sort(function(a, b) {
       var ra = rank[a.appId]
       var rb = rank[b.appId]
       var hasA = ra !== undefined
@@ -401,12 +408,7 @@ Item {
       if (hasA !== hasB) return hasA ? -1 : 1
       return String(a.label).localeCompare(String(b.label))
     })
-  }
-
-  function rerankApps() {
-    if (root.allApps.length === 0) return
-    root.sortApps()
-    root.allApps = root.allApps.slice()
+    return copy
   }
 
   // The app ids the desktop index currently knows — the "still installed" set
@@ -419,7 +421,10 @@ Item {
   }
 
   // ---- unified auto dropdown (apps + files) ----
-  readonly property var appDropRows: root.appMatches(root.stripped, 6)
+  // The typed app suggestions are the ONLY place "Most used first" reorders:
+  // all matches are ranked by recency and then capped, so a fresh match that is
+  // alphabetically late still surfaces. `appMatches(q, 0)` returns every match.
+  readonly property var appDropRows: root.sortByUsage(root.appMatches(root.stripped, 0)).slice(0, 6)
   readonly property var searchRows: {
     var rows = []
     var apps = root.appDropRows
@@ -1818,9 +1823,6 @@ function runErrorTail() {
     onShowOChanged: {
       if (!store.showO && root.headerPos === "omarchy") root.headerPos = ""
     }
-    // Toggling Most used first re-sorts immediately; with the setting off the
-    // rankMap is empty and this falls back to the alphabetical order.
-    onAppRankingChanged: root.rerankApps()
   }
 
   // Resend queries. The list lives in HistoryStore (~/.local/state/obscure/
@@ -1831,13 +1833,12 @@ function runErrorTail() {
     limit: store.historyLimit
   }
 
-  // Most-recently-used app order (~/.local/state/obscure/usage.json). bound to
-  // the "Most used first" setting; every change re-sorts the app list in place
-  // — the row-model watchers pick the new order up on their own.
+  // Most-recently-used app order (~/.local/state/obscure/usage.json). Bound to
+  // the "Most used first" setting; it only feeds the typed app suggestions
+  // (appDropRows reads usage.rankMap), never the grid.
   UsageStore {
     id: usage
     enabled: store.appRanking
-    onChanged: root.rerankApps()
   }
 
   // User-defined web flags (obscure.flags.json). Read blocking at construction;
