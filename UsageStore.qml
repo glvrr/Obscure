@@ -179,6 +179,9 @@ Item {
     path: root.storePath
     blockLoading: true
     watchChanges: false
+    // A missing file is the normal first-run state (we seed it right after);
+    // do not spam the journal with the expected "file does not exist".
+    printErrors: false
   }
 
   Process {
