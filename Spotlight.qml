@@ -82,6 +82,7 @@ Item {
   // Master switch for -r / Ctrl+0, as text while editing ("on" | "off").
   property string draftAllowRun: "off"
   property bool draftShortPaths: false
+  property bool draftAppRanking: true
   property bool draftConfirmRun: true
   property string draftRunTarget: "silent"
   property bool draftBarIcon: true
@@ -367,6 +368,7 @@ Item {
       try {
         root.allApps = root.buildGridApps(root.appLibrary.sortedEntries(""))
         root.sortApps()
+        usage.prune(root.appIdList())
         if (root.allApps.length > 0) return
       } catch (e) {
         root.debugLog("ensureApps appLibrary threw: " + e)
@@ -379,13 +381,41 @@ Item {
     }
     root.allApps = root.buildGridApps(appIndex.apps)
     root.sortApps()
+    usage.prune(root.appIdList())
     if (root.allApps.length === 0) appRetry.restart()
   }
 
+  // App order: most recently launched first (UsageStore.rankMap), then by
+  // label. With ranking off the map is empty, so this degrades to exactly the
+  // old alphabetical sort. `rerankApps` is the notify-after variant: sorting a
+  // JS array in place does NOT fire the property change signal, so the row
+  // models would keep the old order — assigning a fresh slice does.
   function sortApps() {
+    var rank = usage.rankMap
     root.allApps.sort(function(a, b) {
+      var ra = rank[a.appId]
+      var rb = rank[b.appId]
+      var hasA = ra !== undefined
+      var hasB = rb !== undefined
+      if (hasA && hasB) return ra - rb
+      if (hasA !== hasB) return hasA ? -1 : 1
       return String(a.label).localeCompare(String(b.label))
     })
+  }
+
+  function rerankApps() {
+    if (root.allApps.length === 0) return
+    root.sortApps()
+    root.allApps = root.allApps.slice()
+  }
+
+  // The app ids the desktop index currently knows — the "still installed" set
+  // UsageStore.prune keeps. Built from the freshly indexed list, never from
+  // allApps history, so an uninstalled app is dropped on the first full scan.
+  function appIdList() {
+    var out = []
+    for (var i = 0; i < root.allApps.length; i++) out.push(root.allApps[i].appId)
+    return out
   }
 
   // ---- unified auto dropdown (apps + files) ----
@@ -571,6 +601,7 @@ Item {
     configFileRow,
     showHiddenToggle,
     shortPathsToggle,
+    appRankingToggle,
     allowRunToggle,
     confirmRunToggle,
     runModeToggle,
@@ -707,6 +738,7 @@ Item {
     root.draftAnimations = store.animations
     root.draftAllowRun = store.allowRun ? "on" : "off"
     root.draftShortPaths = store.shortPaths
+    root.draftAppRanking = store.appRanking
     root.draftConfirmRun = store.confirmRun
     root.draftRunTarget = store.runTarget
     root.draftBarIcon = store.showBarIcon
@@ -720,24 +752,25 @@ Item {
   // Vertical walk (Up/Down + j/k) over the three sections:
   //   Visuals  0..5  (O island, Apps island, Files island, Animations,
   //                   Bar icon, Apps view)
-  //   Search   6..11 (Default search mode, Pre-filled flags, Query history,
-  //                   User flags file, Show hidden, Short paths view)
-  //   Shell   12..14 (Run shell commands, Shell command warning, Run -r in)
-  // 15/16 are the Apply/Close buttons — ONE vertical target: Down from the last
+  //   Search   6..12 (Default search mode, Pre-filled flags, Query history,
+  //                   User flags file, Show hidden, Short paths view, Most used
+  //                   first)
+  //   Shell   13..15 (Run shell commands, Shell command warning, Run -r in)
+  // 16/17 are the Apply/Close buttons — ONE vertical target: Down from the last
   // row enters it (landing on Apply), Down while inside is a no-op (nothing
   // sits below and Down must never pick a button — switching Apply/Close is
-  // Left/Right only), Up leaves back to row 14. Above row 0 the walk is
+  // Left/Right only), Up leaves back to row 15. Above row 0 the walk is
   // bounded, no wrap.
   function settingsMove(dir) {
-    if (root.settingsIndex >= 15) {
+    if (root.settingsIndex >= 16) {
       if (dir < 0) {
-        root.settingsIndex = 14
+        root.settingsIndex = 15
         root.settingsReveal()
       }
       return
     }
     var next = root.settingsIndex + dir
-    root.settingsIndex = next > 14 ? 15 : Math.max(0, next)
+    root.settingsIndex = next > 15 ? 16 : Math.max(0, next)
     root.settingsReveal()
   }
 
@@ -760,7 +793,7 @@ Item {
   // buttons, so keyboard users can reach Close directly with the tab chain
   // (vertical walk treats the button row as a single unit).
   function settingsTab(dir) {
-    var n = 17 // toggles x7 + segmented rows x4 + history + flags + config + Apply + Close
+    var n = 18 // toggles x8 + segmented rows x4 + history + flags + config + Apply + Close
     root.settingsIndex = (root.settingsIndex + dir + n) % n
     root.settingsReveal()
   }
@@ -771,8 +804,8 @@ Item {
   // while focused).
   function settingsHorizontal(dir) {
     if (dir === 0) return
-    if (root.settingsIndex >= 15) {
-      root.settingsIndex = root.settingsIndex === 15 ? 16 : 15
+    if (root.settingsIndex >= 16) {
+      root.settingsIndex = root.settingsIndex === 16 ? 17 : 16
       root.settingsReveal()
       return
     }
@@ -788,11 +821,11 @@ Item {
       root.draftConfigAction = root.dropdownStep([{ value: "edit" }, { value: "reload" }], root.draftConfigAction, dir)
       return
     }
-    if (root.settingsIndex === 12) {
+    if (root.settingsIndex === 13) {
       root.draftAllowRun = root.dropdownStep(allowRunToggle.options, root.draftAllowRun, dir)
       return
     }
-    if (root.settingsIndex === 14) {
+    if (root.settingsIndex === 15) {
       root.draftRunTarget = root.dropdownStep(runModeToggle.options, root.draftRunTarget, dir)
       return
     }
@@ -805,7 +838,8 @@ Item {
     case 4: showBarIconToggle.clicked(); break
     case 10: showHiddenToggle.clicked(); break
     case 11: shortPathsToggle.clicked(); break
-    case 13: confirmRunToggle.clicked(); break
+    case 12: appRankingToggle.clicked(); break
+    case 14: confirmRunToggle.clicked(); break
     }
   }
 
@@ -846,12 +880,13 @@ Item {
       root.configActivate(); break
     case 10: showHiddenToggle.clicked(); break
     case 11: shortPathsToggle.clicked(); break
-    case 12: root.draftAllowRun = root.dropdownStep(allowRunToggle.options, root.draftAllowRun, 1); break
-    case 13: confirmRunToggle.clicked(); break
-    case 14: root.draftRunTarget = root.dropdownStep(runModeToggle.options, root.draftRunTarget, 1); break
-    case 15:
-      root.settingsApply(); break
+    case 12: appRankingToggle.clicked(); break
+    case 13: root.draftAllowRun = root.dropdownStep(allowRunToggle.options, root.draftAllowRun, 1); break
+    case 14: confirmRunToggle.clicked(); break
+    case 15: root.draftRunTarget = root.dropdownStep(runModeToggle.options, root.draftRunTarget, 1); break
     case 16:
+      root.settingsApply(); break
+    case 17:
       root.exitSettings(); break
     }
   }
@@ -867,6 +902,7 @@ Item {
     store.animations = root.draftAnimations
     store.allowRun = root.draftAllowRun === "on"
     store.shortPaths = root.draftShortPaths
+    store.appRanking = root.draftAppRanking
     store.confirmRun = root.draftConfirmRun
     store.runTarget = root.draftRunTarget
     store.showBarIcon = root.draftBarIcon
@@ -1089,6 +1125,10 @@ function runErrorTail() {
 
   function launchApp(g) {
     root.debugLog("launch " + g.appId)
+    // Every launch funnels through here (grid, apps-as-list, auto row, -a), so
+    // this is the one place a "call" is recorded. touch() no-ops while the
+    // Most used first setting is off.
+    usage.touch(g.appId)
     if (root.appLibrary) root.appLibrary.launch(g.appId, g.label)
     else appIndex.launch(g.appId)
   }
@@ -1778,6 +1818,9 @@ function runErrorTail() {
     onShowOChanged: {
       if (!store.showO && root.headerPos === "omarchy") root.headerPos = ""
     }
+    // Toggling Most used first re-sorts immediately; with the setting off the
+    // rankMap is empty and this falls back to the alphabetical order.
+    onAppRankingChanged: root.rerankApps()
   }
 
   // Resend queries. The list lives in HistoryStore (~/.local/state/obscure/
@@ -1786,6 +1829,15 @@ function runErrorTail() {
   HistoryStore {
     id: history
     limit: store.historyLimit
+  }
+
+  // Most-recently-used app order (~/.local/state/obscure/usage.json). bound to
+  // the "Most used first" setting; every change re-sorts the app list in place
+  // — the row-model watchers pick the new order up on their own.
+  UsageStore {
+    id: usage
+    enabled: store.appRanking
+    onChanged: root.rerankApps()
   }
 
   // User-defined web flags (obscure.flags.json). Read blocking at construction;
@@ -2390,12 +2442,12 @@ function runErrorTail() {
                       Keys.onReturnPressed: function(event) {
                         event.accepted = true
                         settingsKeys.forceActiveFocus()
-                        root.settingsIndex = 15
+                        root.settingsIndex = 16
                       }
                       Keys.onEnterPressed: function(event) {
                         event.accepted = true
                         settingsKeys.forceActiveFocus()
-                        root.settingsIndex = 15
+                        root.settingsIndex = 16
                       }
                       Keys.onEscapePressed: function(event) {
                         // First Esc drops out of the editor back to the settings
@@ -2471,12 +2523,12 @@ function runErrorTail() {
                       Keys.onReturnPressed: function(event) {
                         event.accepted = true
                         settingsKeys.forceActiveFocus()
-                        root.settingsIndex = 15
+                        root.settingsIndex = 16
                       }
                       Keys.onEnterPressed: function(event) {
                         event.accepted = true
                         settingsKeys.forceActiveFocus()
-                        root.settingsIndex = 15
+                        root.settingsIndex = 16
                       }
                       Keys.onEscapePressed: function(event) {
                         event.accepted = true
@@ -2638,6 +2690,19 @@ function runErrorTail() {
                     onClicked: root.draftShortPaths = !root.draftShortPaths
                   }
 
+                  // Most used first: apps the user launches move to the top of the grid,
+                  // the auto dropdown and the query matches (MRU order, see UsageStore).
+                  Toggle {
+                    id: appRankingToggle
+                    width: parent.width
+                    label: "Most used first"
+                    description: "Recently launched apps sort to the top of the app results"
+                    checked: root.draftAppRanking
+                    hasCursor: root.settingsIndex === 12
+                    onHovered: function(h) { if (h) root.settingsIndex = 12 }
+                    onClicked: root.draftAppRanking = !root.draftAppRanking
+                  }
+
                   PanelSeparator {
                     width: parent.width
                   }
@@ -2663,8 +2728,8 @@ function runErrorTail() {
                       { value: "off", label: "Off" }
                     ]
                     value: root.draftAllowRun
-                    hasCursor: root.settingsIndex === 12
-                    onHovered: function(h) { if (h) root.settingsIndex = 12 }
+                    hasCursor: root.settingsIndex === 13
+                    onHovered: function(h) { if (h) root.settingsIndex = 13 }
                     onChanged: function(value) { root.draftAllowRun = value }
                   }
 
@@ -2674,8 +2739,8 @@ function runErrorTail() {
                     label: "Shell Command Warning"
                     description: "Press Enter twice to run -r / Ctrl+0 commands instead of running them instantly"
                     checked: root.draftConfirmRun
-                    hasCursor: root.settingsIndex === 13
-                    onHovered: function(h) { if (h) root.settingsIndex = 13 }
+                    hasCursor: root.settingsIndex === 14
+                    onHovered: function(h) { if (h) root.settingsIndex = 14 }
                     onClicked: root.draftConfirmRun = !root.draftConfirmRun
                   }
 
@@ -2688,8 +2753,8 @@ function runErrorTail() {
                       { value: "external", label: "External terminal" }
                     ]
                     value: root.draftRunTarget
-                    hasCursor: root.settingsIndex === 14
-                    onHovered: function(h) { if (h) root.settingsIndex = 14 }
+                    hasCursor: root.settingsIndex === 15
+                    onHovered: function(h) { if (h) root.settingsIndex = 15 }
                     onChanged: function(value) { root.draftRunTarget = value }
                   }
 
@@ -2701,8 +2766,8 @@ function runErrorTail() {
                       id: applyButton
                       text: "Apply"
                       selected: true
-                      hasCursor: root.settingsIndex === 15
-                      onHovered: function(h) { if (h) root.settingsIndex = 15 }
+                      hasCursor: root.settingsIndex === 16
+                      onHovered: function(h) { if (h) root.settingsIndex = 16 }
                       onClicked: root.settingsApply()
 
                       // Apply is permanently emphasized via `selected`, whose
@@ -2724,8 +2789,8 @@ function runErrorTail() {
                     Button {
                       id: closeButton
                       text: "Close"
-                      hasCursor: root.settingsIndex === 16
-                      onHovered: function(h) { if (h) root.settingsIndex = 16 }
+                      hasCursor: root.settingsIndex === 17
+                      onHovered: function(h) { if (h) root.settingsIndex = 17 }
                       onClicked: root.exitSettings()
                     }
                   }

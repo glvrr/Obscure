@@ -41,6 +41,12 @@ Item {
   // Spotlight.shortPath). Default OFF: it is purely cosmetic, so a fresh
   // install and an upgraded one both keep the full paths they have now.
   property bool shortPaths: false
+  // Most-recently-launched apps sort to the top of the app grid, the auto
+  // dropdown and the query matches (UsageStore keeps the order). Default ON:
+  // it only ever reorders rows the user already sees, and a fresh install has
+  // nothing recorded yet, so the first launch is the one it starts learning
+  // from. Off = the recorded file is left alone, just not applied.
+  property bool appRanking: true
   // Where a -r / Ctrl+0 command runs: "silent" spawns bash in the background
   // (invisible), "external" runs it in the system terminal via `omarchy launch
   // terminal` — the same channel the -oc flag uses.
@@ -107,6 +113,7 @@ Item {
     // false) and starts off.
     root.allowRun = hasConfig ? (o.allowRun === undefined ? true : !!o.allowRun) : false
     root.shortPaths = !!o.shortPaths
+    root.appRanking = o.appRanking === undefined ? true : !!o.appRanking
     root.confirmRun = o.confirmRun === undefined ? true : !!o.confirmRun
     root.runTarget = o.runTarget === "external" ? "external" : "silent"
     // Kept verbatim (no trim): "-g " with its trailing space must stay so the
@@ -139,6 +146,7 @@ Item {
         showBarIcon: root.showBarIcon,
         allowRun: root.allowRun,
         shortPaths: root.shortPaths,
+        appRanking: root.appRanking,
         confirmRun: root.confirmRun,
         runTarget: root.runTarget,
         defaultFlags: root.defaultFlags,
