@@ -1,5 +1,9 @@
 # Obscure
 
+<p align="center">
+  <img src="preview.png" alt="Obscure — spotlight-style launcher for Omarchy" width="900">
+</p>
+
 A spotlight-style launcher for [Omarchy](https://omarchy.app) — a single
 floating card over your desktop that searches apps, files and the web as you
 type. Quickshell/QML plugin, no background service, no telemetry.
