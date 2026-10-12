@@ -2134,14 +2134,15 @@ function runErrorTail() {
             QueryBar {
               id: queryField
               anchors.fill: parent
-              // Keep the field read-only while the card is hidden: Qt's
-              // QQuickTextInput connects QClipboard::dataChanged to
-              // q_canPasteChanged(), which transfers the whole clipboard
+              // Keep the field read-only unless it is actually the active
+              // editor: Qt's QQuickTextInput connects QClipboard::dataChanged
+              // to q_canPasteChanged(), which transfers the whole clipboard
               // (mimeData->text()) on every change. The transfer is skipped
               // whenever m_readOnly is set, so the shell never slurps foreign
-              // clipboard content while the panel is closed. Typing/Ctrl+V are
-              // unaffected once the card opens (readOnly flips to false).
-              readOnly: !root.opened
+              // clipboard content while the panel is closed or while another
+              // surface holds focus (settings/help/result navigation).
+              // Typing/Ctrl+V are unaffected while the field has focus.
+              readOnly: !root.opened || !queryField.activeFocus
               tabMode: root.activeTab
               gridActive: root.gridMode && root.gridEngaged
               filterActive: root.filterActive
@@ -2447,8 +2448,10 @@ function runErrorTail() {
 
                     TextField {
                       id: defaultFlagsField
-                      // Same hidden-state clipboard guard as the query line.
-                      readOnly: !root.opened
+                      // Same clipboard guard as the query line: read-only
+                      // unless this field is the active editor (it only gains
+                      // focus via settingsActivate).
+                      readOnly: !root.opened || !defaultFlagsField.activeFocus
                       // Everything the label leaves, so the box runs to the
                       // panel's right edge (see historyField for why this is
                       // not a TextMetrics probe).
@@ -2528,8 +2531,10 @@ function runErrorTail() {
 
                     TextField {
                       id: historyField
-                      // Same hidden-state clipboard guard as the query line.
-                      readOnly: !root.opened
+                      // Same clipboard guard as the query line: read-only
+                      // unless this field is the active editor (it only gains
+                      // focus via settingsActivate).
+                      readOnly: !root.opened || !historyField.activeFocus
                       // Everything the label leaves, so the box runs to the
                       // panel's right edge. NOT a TextMetrics probe: that copies
                       // the kit font before it resolves and measured 0 here,
