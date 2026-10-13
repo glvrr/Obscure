@@ -1,0 +1,125 @@
+import QtQuick
+import Quickshell.Io
+import qs.Ui
+
+// Clipboard-safe single-line editor (marketplace review #11229).
+//
+// Affected Qt builds (6.11.2 / 6.12.0) connect QClipboard::dataChanged to
+// QQuickTextInput::q_canPasteChanged(), which calls QMimeData::text() and pulls
+// the ENTIRE foreign clipboard offer on every change — with no byte cap and no
+// overall deadline — even when nothing is pasted, and before any validator or
+// maximumLength runs. A read-only editor is skipped by both that path and the
+// canPaste getter, so the shared shell can never be stalled or exhausted by a
+// clipboard provider. This field therefore stays read-only for its whole
+// lifetime; text edits and paste are bounded and go through this file. Mirrors
+// the approved Oma Edge fix (marketplace #10880).
+TextField {
+  id: root
+
+  // Emitted for every text change this component performs itself. The built-in
+  // TextInput.textEdited only fires for native edits, which never happen here.
+  signal manualEdited()
+
+  readOnly: true
+  maximumLength: 1024
+  cursorVisible: activeFocus
+  selectByMouse: true
+  clip: true
+
+  // Insert text at the caret, replacing the selection, without splitting a
+  // surrogate pair (QML's JS strings expose UTF-16 code units).
+  function replaceSelection(replacement) {
+    var start = selectionStart
+    var end = selectionEnd
+    var room = Math.max(0, maximumLength - (text.length - (end - start)))
+    var bounded = replacement.slice(0, room)
+    var last = bounded.charCodeAt(bounded.length - 1)
+    if (last >= 0xd800 && last <= 0xdbff) bounded = bounded.slice(0, -1)
+    text = text.slice(0, start) + bounded + text.slice(end)
+    cursorPosition = start + bounded.length
+    root.manualEdited()
+  }
+
+  function isPasteGesture(event) {
+    if (event.key === Qt.Key_V && (event.modifiers & (Qt.ControlModifier | Qt.MetaModifier)))
+      return true
+    // Shift+Insert, with no other modifier held.
+    if (event.key === Qt.Key_Insert && (event.modifiers & Qt.ShiftModifier)
+        && !(event.modifiers & (Qt.ControlModifier | Qt.MetaModifier | Qt.AltModifier)))
+      return true
+    return false
+  }
+
+  // Bounded clipboard read: one child process, only on an explicit paste
+  // gesture, with a hard wall-clock deadline and a fixed byte budget. No native
+  // editor ever touches the dataChanged path.
+  function requestPaste() {
+    pasteProc.running = false
+    pasteProc.running = true
+  }
+
+  // Overridable: a derived field returns true for keys it handles itself
+  // (QueryBar routes Esc, Ctrl hotkeys, chip Backspace, empty-line arrows and
+  // Tab). Returning false lets the shared text editing below run.
+  function handleSpecialKey(event) { return false }
+
+  function handleKey(event) {
+    if (root.handleSpecialKey(event)) return
+    if (isPasteGesture(event)) {
+      requestPaste()
+      event.accepted = true
+      return
+    }
+    var shortcut = event.modifiers & (Qt.ControlModifier | Qt.MetaModifier | Qt.AltModifier)
+    if (shortcut) {
+      if (event.key === Qt.Key_A && (event.modifiers & Qt.ControlModifier)) {
+        selectAll()
+        event.accepted = true
+      }
+      // Everything else (cut, copy, ...) is left to native read-only handling,
+      // which neither edits the field nor reads a foreign clipboard offer.
+      return
+    }
+    if (event.key === Qt.Key_Backspace || event.key === Qt.Key_Delete) {
+      if (selectionStart === selectionEnd) {
+        var position = cursorPosition
+        if (event.key === Qt.Key_Backspace && position > 0) {
+          var previous = text.charCodeAt(position - 1)
+          var count = previous >= 0xdc00 && previous <= 0xdfff && position > 1 ? 2 : 1
+          select(position - count, position)
+        } else if (event.key === Qt.Key_Delete && position < text.length) {
+          var next = text.charCodeAt(position)
+          var count = next >= 0xd800 && next <= 0xdbff && position + 1 < text.length ? 2 : 1
+          select(position, position + count)
+        }
+      }
+      replaceSelection("")
+    } else if (event.text && !/[\x00-\x1f\x7f]/.test(event.text)) {
+      replaceSelection(event.text)
+    } else {
+      return
+    }
+    event.accepted = true
+  }
+
+  // BeforeItem: the focused field must see Return before the native editor can
+  // swallow it (a single-line editor emits `accepted` there); unhandled keys
+  // still reach the native navigation/selection handling.
+  Keys.priority: Keys.BeforeItem
+  Keys.onPressed: function(event) { root.handleKey(event) }
+
+  Process {
+    id: pasteProc
+    running: false
+    command: ["sh", "-c", "timeout -k 1 2 wl-paste -n 2>/dev/null | head -c 512"]
+    stdout: StdioCollector {
+      id: pasteOut
+      waitForEnd: true
+      onStreamFinished: {
+        // Single-line field: collapse control/whitespace runs, trim the ends.
+        var t = pasteOut.text.replace(/[\x00-\x1f\x7f]+/g, " ").replace(/^\s+|\s+$/g, "")
+        if (t.length > 0) root.replaceSelection(t)
+      }
+    }
+  }
+}

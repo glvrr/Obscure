@@ -1,12 +1,11 @@
 import QtQuick
 import qs.Commons
-import qs.Ui
 import "Flags.js" as Flags
 
 // The query line (TEXT_FIELD). Parses leading flags and re-exposes the
 // result so Spotlight can route on it. Shows an inline autocomplete
 // suggestion (the suffix after the caret) and completes it on Tab.
-TextField {
+KeyLineEdit {
   id: root
 
   property string tabMode: "apps"
@@ -46,23 +45,38 @@ TextField {
   placeholderText: root.placeholderFor()
   selectByMouse: true
   font.pixelSize: Style.font.heading
-  onAccepted: root.activate()
 
-  Keys.onPressed: function(event) {
+  // Keys the query line reserves for itself; every returning-false path falls
+  // through to the shared read-only text editing in KeyLineEdit.handleKey.
+  function handleSpecialKey(event) {
     if (event.key === Qt.Key_Escape) {
       root.escapeKey()
       event.accepted = true
-    } else if ((event.modifiers & Qt.ControlModifier) && Flags.ctrlCommand(event.key, true) !== "") {
+      return true
+    }
+    if ((event.modifiers & Qt.ControlModifier) && Flags.ctrlCommand(event.key, true) !== "") {
       root.hotkey(Flags.ctrlCommand(event.key, true))
       event.accepted = true
-    } else if (event.key === Qt.Key_Backspace && root.selectedText.length === 0 && root.cursorPosition === 0) {
+      return true
+    }
+    if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter) {
+      // Enter lands HERE, not in the keyCatcher: a focused field never lets
+      // Return bubble. With the resend list up it inserts the highlighted
+      // entry instead of running the empty query behind it.
+      root.activate()
+      event.accepted = true
+      return true
+    }
+    if (event.key === Qt.Key_Backspace && root.selectedText.length === 0 && root.cursorPosition === 0) {
       if (root.filterActive) {
         root.popFilter()
       } else if (root.leadingToken() !== "") {
         root.popRawToken()
       }
       event.accepted = true
-    } else if (root.text === "" && !root.filterActive && (event.key === Qt.Key_Left || event.key === Qt.Key_Right)) {
+      return true
+    }
+    if (root.text === "" && !root.filterActive && (event.key === Qt.Key_Left || event.key === Qt.Key_Right)) {
       var dir = event.key === Qt.Key_Right ? 1 : -1
       if (root.gridActive) {
         root.navigateGrid(dir)
@@ -70,10 +84,14 @@ TextField {
         root.cycleMode(dir)
       }
       event.accepted = true
-    } else if (event.key === Qt.Key_Tab && root.suggestion !== "" && root.suggestion !== root.text) {
+      return true
+    }
+    if (event.key === Qt.Key_Tab && root.suggestion !== "" && root.suggestion !== root.text) {
       root.tabComplete()
       event.accepted = true
+      return true
     }
+    return false
   }
 
   // The leading edge "-token" chunk of the field text while it is still raw

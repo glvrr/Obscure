@@ -139,7 +139,7 @@ Item {
   readonly property string visiblePart: root.filterActive ? root.query.slice(Flags.prefix(root.query, root.parsed).length) : root.query
 
   // The query field is NOT bound to visiblePart: a live `text:` binding that
-  // re-sets the text on every keystroke (via the onTextEdited write-back)
+  // re-sets the text on every keystroke (via the onManualEdited write-back)
   // resets the field's internal edit state mid-input and duplicates the next
   // committed character. Sync is therefore write-on-difference only: while the
   // user types field.text == visiblePart, so nothing is pushed back in.
@@ -1245,7 +1245,6 @@ function runErrorTail() {
     }
     root.query = "-" + cmd + " "
     queryField.forceActiveFocus()
-    queryField.positionLength = 0
   }
 
   // ---- activation ----
@@ -2134,15 +2133,11 @@ function runErrorTail() {
             QueryBar {
               id: queryField
               anchors.fill: parent
-              // Keep the field read-only unless it is actually the active
-              // editor: Qt's QQuickTextInput connects QClipboard::dataChanged
-              // to q_canPasteChanged(), which transfers the whole clipboard
-              // (mimeData->text()) on every change. The transfer is skipped
-              // whenever m_readOnly is set, so the shell never slurps foreign
-              // clipboard content while the panel is closed or while another
-              // surface holds focus (settings/help/result navigation).
-              // Typing/Ctrl+V are unaffected while the field has focus.
-              readOnly: !root.opened || !queryField.activeFocus
+              // QueryBar is a KeyLineEdit: read-only for its whole lifetime so
+              // Qt's q_canPasteChanged() path (dataChanged -> mimeData->text(),
+              // no byte cap, no deadline) can never transfer foreign clipboard
+              // content. Typing and an explicitly bounded Ctrl+V are handled
+              // inside KeyLineEdit; see marketplace #11229 / #10880.
               tabMode: root.activeTab
               gridActive: root.gridMode && root.gridEngaged
               filterActive: root.filterActive
@@ -2153,7 +2148,7 @@ function runErrorTail() {
                 ? queryField.defaultLeftPadding + chipRow.width + Style.spacing.xs + Style.spacing.sm
                 : queryField.defaultLeftPadding
               suggestion: root.suggestionText
-              onTextEdited: root.applyFieldText(queryField.text)
+              onManualEdited: root.applyFieldText(queryField.text)
               onActivate: {
                 // Enter lands HERE, not in the keyCatcher: a focused text
                 // field consumes Return/Enter and never lets them bubble. With
@@ -2446,12 +2441,10 @@ function runErrorTail() {
                       elide: Text.ElideRight
                     }
 
-                    TextField {
+                    KeyLineEdit {
                       id: defaultFlagsField
-                      // Same clipboard guard as the query line: read-only
-                      // unless this field is the active editor (it only gains
-                      // focus via settingsActivate).
-                      readOnly: !root.opened || !defaultFlagsField.activeFocus
+                      // KeyLineEdit (read-only by design): no native clipboard
+                      // read; typing + bounded Ctrl+V only.
                       // Everything the label leaves, so the box runs to the
                       // panel's right edge (see historyField for why this is
                       // not a TextMetrics probe).
@@ -2529,12 +2522,10 @@ function runErrorTail() {
                       elide: Text.ElideRight
                     }
 
-                    TextField {
+                    KeyLineEdit {
                       id: historyField
-                      // Same clipboard guard as the query line: read-only
-                      // unless this field is the active editor (it only gains
-                      // focus via settingsActivate).
-                      readOnly: !root.opened || !historyField.activeFocus
+                      // KeyLineEdit (read-only by design): no native clipboard
+                      // read; typing + bounded Ctrl+V only.
                       // Everything the label leaves, so the box runs to the
                       // panel's right edge. NOT a TextMetrics probe: that copies
                       // the kit font before it resolves and measured 0 here,
