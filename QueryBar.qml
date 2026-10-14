@@ -149,6 +149,7 @@ KeyLineEdit {
   }
 
   Text {
+    textFormat: Text.PlainText
     visible: root.showSuggestion
     anchors.verticalCenter: parent.verticalCenter
     anchors.left: parent.left

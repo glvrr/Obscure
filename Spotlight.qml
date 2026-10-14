@@ -2181,6 +2181,7 @@ function runErrorTail() {
             // Sibling (not a child) of the field, so its own padding/background
             // logic stays untouched; rightMargin mirrors the field's padding.
             Text {
+              textFormat: Text.PlainText
               id: queryHelpHint
               anchors.right: queryField.right
               anchors.rightMargin: queryField.rightPadding
@@ -2218,6 +2219,7 @@ function runErrorTail() {
                   border.color: Util.alpha(root.chipTextColor, 0.30)
 
                   Text {
+                    textFormat: Text.PlainText
                     id: chipText
                     anchors.top: parent.top
                     anchors.bottom: parent.bottom
@@ -2618,7 +2620,6 @@ function runErrorTail() {
                         anchors.verticalCenter: parent.verticalCenter
 
                         Text {
-                          textFormat: Text.PlainText
                           text: "User Flags File"
                           color: Color.foreground
                           font.family: Style.font.family
@@ -2844,6 +2845,7 @@ function runErrorTail() {
                   // Visible only while a flash is active, so it costs no height
                   // otherwise (Column skips invisible children).
                   Text {
+                    textFormat: Text.PlainText
                     visible: root.flashActive
                     width: parent.width
                     height: Style.space(24)
@@ -2976,6 +2978,7 @@ function runErrorTail() {
               }
 
               Text {
+                textFormat: Text.PlainText
                 width: parent.width
                 height: Style.space(26)
                 text: "Esc or Ctrl+H closes  -  arrows move  -  typing returns to the search"
@@ -3018,6 +3021,7 @@ function runErrorTail() {
           }
 
           Text {
+            textFormat: Text.PlainText
             visible: (root.showHint || root.flashActive) && !root.settingsOpen && !root.helpOpen && !root.catVisible
             anchors.top: parent.top
             anchors.left: parent.left
@@ -3290,6 +3294,7 @@ function runErrorTail() {
 
       // Section header: HotKeys / Flags.
       Text {
+        textFormat: Text.PlainText
         anchors.left: parent.left
         anchors.leftMargin: Style.space(7)
         anchors.right: parent.right
@@ -3329,6 +3334,7 @@ function runErrorTail() {
         }
 
         Text {
+          textFormat: Text.PlainText
           Layout.fillWidth: true
           text: modelData.detail
           font.family: Style.font.menuFamily
@@ -3387,6 +3393,7 @@ function runErrorTail() {
         }
 
         Text {
+          textFormat: Text.PlainText
           anchors.horizontalCenter: parent.horizontalCenter
           width: parent.width
           text: gridCell.label
@@ -3456,6 +3463,7 @@ function runErrorTail() {
       }
 
       Text {
+        textFormat: Text.PlainText
         visible: !rowItem.isApp
         anchors.verticalCenter: parent.verticalCenter
         anchors.left: parent.left
@@ -3470,6 +3478,7 @@ function runErrorTail() {
       }
 
       Text {
+        textFormat: Text.PlainText
         id: titleText
         anchors.verticalCenter: parent.verticalCenter
         anchors.left: parent.left
