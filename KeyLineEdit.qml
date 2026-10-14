@@ -27,6 +27,17 @@ TextField {
   Component.onCompleted: if (root.contentItem) root.contentItem.textFormat = Text.PlainText
   maximumLength: 1024
   cursorVisible: activeFocus
+  // Qt's read-only path calls setCursorVisible(false) at construction
+  // (QQuickTextInput::setReadOnly), and the built-in caret is drawn only for
+  // editable fields, so a delegate is the one cursor that renders here. Its
+  // visibility follows focus; width/colour mirror the kit's caret.
+  cursorDelegate: Rectangle {
+    width: 2
+    radius: 1
+    height: Math.max(1, root.height - root.topPadding - root.bottomPadding)
+    color: root.color
+    visible: root.activeFocus
+  }
   selectByMouse: true
   clip: true
 
