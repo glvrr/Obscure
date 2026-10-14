@@ -1646,10 +1646,14 @@ function runErrorTail() {
     // the user must pick the programs deliberately). The terminal gets the
     // query as ONE argv element through xdg-terminal-exec's `exec "$@"`, so no
     // shell quoting is needed: spaces/quotes/$() reach opencode verbatim.
+    // TUI request: OpenCode CLI 2.0+ moved `--agent`/`--prompt` off the root
+    // command. The interactive TUI lives behind `opencode mini` (the `run`
+    // subcommand runs non-interactively and exits, closing the terminal), so
+    // launch the minimal interactive interface with the plan agent and prompt.
     case "opencode": {
       if (!q) return
       root._opening = true
-      Quickshell.execDetached(["omarchy", "launch", "terminal", "opencode", "--agent", "plan", "--prompt", q])
+      Quickshell.execDetached(["omarchy", "launch", "terminal", "opencode", "mini", "--agent", "plan", "--prompt", q])
       root.close()
       break
     }
