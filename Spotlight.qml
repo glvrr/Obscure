@@ -517,6 +517,11 @@ Item {
 
   readonly property string suggestionText: {
     if (!root.stripped) return ""
+    // A dash-led token that did not parse into a known flag ("-sh", "-s") is
+    // plain text, not a mode. Keep it that way: no ghost suggestion may float
+    // over it, so Tab/Enter can never silently commit an unrelated app/file
+    // row that merely contains those letters.
+    if (!root.hasFlag && root.stripped.charAt(0) === "-") return ""
     if (root.gridMode) {
       var g = root.gridItems[root.safeGridIndex]
       if (g && g.label.toLowerCase().indexOf(root.stripped.toLowerCase()) === 0) return g.label
