@@ -1653,7 +1653,7 @@ function runErrorTail() {
     case "opencode": {
       if (!q) return
       root._opening = true
-      Quickshell.execDetached(["omarchy", "launch", "terminal", "opencode", "mini", "--agent", "plan", "--prompt", q])
+      Quickshell.execDetached(["omarchy", "launch", "terminal", "opencode", "--prompt", q])
       root.close()
       break
     }
