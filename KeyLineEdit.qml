@@ -32,11 +32,21 @@ TextField {
   // editable fields, so a delegate is the one cursor that renders here. Its
   // visibility follows focus; width/colour mirror the kit's caret.
   cursorDelegate: Rectangle {
+    id: caret
     width: 2
     radius: 1
     height: Math.max(1, root.height - root.topPadding - root.bottomPadding)
     color: root.color
     visible: root.activeFocus
+    opacity: 1
+    // Match the platform blink (QStyleHints::cursorFlashTime; 0 disables the
+    // flash). The native caret animated this on its own, the delegate must not.
+    SequentialAnimation on opacity {
+      running: caret.visible && Qt.styleHints.cursorFlashTime > 0
+      loops: Animation.Infinite
+      NumberAnimation { to: 0.0; duration: Math.max(1, Qt.styleHints.cursorFlashTime / 2) }
+      NumberAnimation { to: 1.0; duration: Math.max(1, Qt.styleHints.cursorFlashTime / 2) }
+    }
   }
   selectByMouse: true
   clip: true
