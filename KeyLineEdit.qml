@@ -24,7 +24,7 @@ TextField {
   // Keep a pasted payload from being interpreted as rich
   // text: the content item of the underlying QQC TextField would otherwise
   // fetch remote resources embedded in <img> on AutoText.
-  Component.onCompleted: if (contentItem) contentItem.textFormat = Text.PlainText
+  Component.onCompleted: if (root.contentItem) root.contentItem.textFormat = Text.PlainText
   maximumLength: 1024
   cursorVisible: activeFocus
   selectByMouse: true
