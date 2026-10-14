@@ -30,7 +30,9 @@ Item {
     args.push("-E", "node_modules", "-E", ".git", "-E", ".cache")
     var q = String(query || "").trim()
     if (q) {
-      args.push(q)
+      // A leading dash (e.g. "-s") must not be read as an fd option. fd marks
+      // the end of options with "--"; see package "fd 10.5.0" (-- end of options).
+      args.push("--", q)
     } else {
       args.push("--max-depth", "2", "--changed-within", "7d")
     }
